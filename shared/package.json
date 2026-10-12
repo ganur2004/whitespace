@@ -16,6 +16,11 @@
     "build": "tsc -b"
   },
   "devDependencies": {
-    "@types/geojson": "^7946.0.16"
+    "@types/geojson": "^7946.0.16",
+    "@types/ngeohash": "^0.6.8"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.4.0",
+    "ngeohash": "^0.6.4"
   }
 }
