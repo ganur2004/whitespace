@@ -1,0 +1,43 @@
+{
+  "name": "whitespace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Whitespace — find where a new venue's audience already is, but its competitors are not",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "shared",
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "postinstall": "tsc -b shared",
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @whitespace/api",
+    "dev:web": "npm run dev --workspace @whitespace/web",
+    "demo": "DEMO_MODE=true npm run dev",
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --build",
+    "fixtures": "tsx --conditions=development scripts/make-fixtures.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/ngeohash": "^0.6.8",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "ngeohash": "^0.6.3",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^5.0.3"
+  }
+}

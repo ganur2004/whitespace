@@ -1,0 +1,9 @@
+dist
+dist-types
+node_modules
+package-lock.json
+api/fixtures
+api/recordings
+SPEC.md
+CLAUDE.md
+docs
