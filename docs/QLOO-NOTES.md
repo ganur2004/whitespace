@@ -192,3 +192,20 @@ curl -sG "$Q/v2/insights" -H "X-Api-Key: $QLOO_API_KEY" --data-urlencode "filter
 ## Проверено на S0
 
 Заполнить по итогам S0: пути к полям мест, поле совпадения, лимиты, решения по экспериментам E1–E7, список городов с `localityId`.
+
+### Предварительный формат мест
+
+Пока формат не проверен, `parsePlaces` в `api/src/qloo/types.ts` и синтетический `api/fixtures/places.json` используют такие пути. На S0 сверить с живым ответом и поправить оба места:
+
+| Что | Путь сейчас |
+|---|---|
+| Список мест | `results.entities[]` |
+| ID и название | `entity_id`, `name` |
+| Координаты | `location.lat`, `location.lon` (без них место пропускается) |
+| Район | `properties.neighborhood` |
+| Ценовой уровень | `properties.price_level` |
+| Теги | `tags[].id` или `tags[].tag_id` |
+| Совпадение со вкусом | `query.affinity` |
+| Объяснение | любые массивы `{ entity_id, score }` внутри `query.explainability` |
+
+Демо-сценарий в `shared/src/scenarios.ts` пока использует синтетические ID якорей и тега. После S0 заменить их на реальные ID из `/search` и `/v2/tags`.

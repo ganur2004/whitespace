@@ -4,6 +4,7 @@ import {
   isValidLonLat,
   type HeatCell,
   type LonLat,
+  type PlaceRef,
   type ResolvedLocality,
 } from "@whitespace/shared";
 
@@ -73,6 +74,81 @@ export function localityCenter(
     }
   }
   return best;
+}
+
+const placeSchema = z.object({
+  entity_id: z.string().min(1),
+  name: z.string(),
+  location: z.object({ lat: z.number(), lon: z.number() }).optional(),
+  properties: z
+    .object({
+      neighborhood: z.string().optional(),
+      price_level: z.number().optional(),
+    })
+    .optional(),
+  tags: z.array(z.object({ id: z.string().optional(), tag_id: z.string().optional() })).optional(),
+  query: z
+    .object({
+      affinity: z.number().optional(),
+      explainability: z.unknown().optional(),
+    })
+    .optional(),
+});
+
+const placesResponseSchema = z.object({
+  results: z.object({ entities: z.array(z.unknown()) }),
+});
+
+const driverSchema = z.object({ entity_id: z.string(), score: z.number() });
+
+export interface ParsedPlaces {
+  places: PlaceRef[];
+  skipped: number;
+}
+
+export function parsePlaces(data: unknown): ParsedPlaces {
+  const { results } = placesResponseSchema.parse(data);
+  const places: PlaceRef[] = [];
+  let skipped = 0;
+  for (const raw of results.entities) {
+    const parsed = placeSchema.safeParse(raw);
+    const location = parsed.success ? parsed.data.location : undefined;
+    if (!parsed.success || !location || !isValidLonLat([location.lon, location.lat])) {
+      skipped += 1;
+      continue;
+    }
+    const entity = parsed.data;
+    const place: PlaceRef = {
+      id: entity.entity_id,
+      name: entity.name,
+      lat: location.lat,
+      lon: location.lon,
+      tags: (entity.tags ?? []).flatMap((tag) => tag.id ?? tag.tag_id ?? []),
+    };
+    if (entity.properties?.neighborhood) place.neighborhood = entity.properties.neighborhood;
+    if (entity.properties?.price_level !== undefined) {
+      place.priceLevel = entity.properties.price_level;
+    }
+    if (entity.query?.affinity !== undefined) place.affinity = clamp01(entity.query.affinity);
+    const drivers = parseDrivers(entity.query?.explainability);
+    if (drivers.length > 0) place.drivers = drivers;
+    places.push(place);
+  }
+  return { places, skipped };
+}
+
+function parseDrivers(value: unknown): { anchorId: string; score: number }[] {
+  if (typeof value !== "object" || value === null) return [];
+  const lists = Array.isArray(value) ? [value] : Object.values(value).filter(Array.isArray);
+  return lists
+    .flat()
+    .flatMap((item) => {
+      const driver = driverSchema.safeParse(item);
+      return driver.success
+        ? [{ anchorId: driver.data.entity_id, score: clamp01(driver.data.score) }]
+        : [];
+    })
+    .sort((a, b) => b.score - a.score);
 }
 
 function clamp01(value: number): number {
