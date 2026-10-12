@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Zone } from "@whitespace/shared";
 
 export interface ZoneCardsProps {
@@ -5,6 +6,7 @@ export interface ZoneCardsProps {
   selectedZoneId: string | undefined;
   excludedCount: number;
   onSelect: (zoneId: string) => void;
+  onHover: (zoneId: string | undefined) => void;
   onExclude: (zone: Zone) => void;
   onResetExclusions: () => void;
 }
@@ -14,9 +16,18 @@ export function ZoneCards({
   selectedZoneId,
   excludedCount,
   onSelect,
+  onHover,
   onExclude,
   onResetExclusions,
 }: ZoneCardsProps): React.JSX.Element {
+  const cards = useRef(new Map<string, HTMLElement>());
+
+  useEffect(() => {
+    if (selectedZoneId) {
+      cards.current.get(selectedZoneId)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [selectedZoneId]);
+
   return (
     <div className="zone-list">
       {excludedCount > 0 && (
@@ -32,7 +43,15 @@ export function ZoneCards({
       {zones.map((zone) => (
         <article
           key={zone.id}
+          ref={(element) => {
+            if (element) cards.current.set(zone.id, element);
+            else cards.current.delete(zone.id);
+          }}
           className={`zone-card${zone.id === selectedZoneId ? " is-selected" : ""}`}
+          onMouseEnter={() => onHover(zone.id)}
+          onMouseLeave={() => onHover(undefined)}
+          onFocus={() => onHover(zone.id)}
+          onBlur={() => onHover(undefined)}
         >
           <header className="zone-card-header">
             <span className="zone-rank" aria-hidden="true">

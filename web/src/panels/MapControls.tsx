@@ -3,6 +3,7 @@ import { AUDIENCE_RAMP, OPPORTUNITY_RAMP, type LayerMode } from "../map/layers.j
 export interface MapControlsProps {
   mode: LayerMode;
   competitionWeight: number;
+  variant: "floating" | "sheet";
   onModeChange: (mode: LayerMode) => void;
   onCompetitionWeightChange: (value: number) => void;
 }
@@ -18,15 +19,23 @@ const LEGEND: Record<
 const gradient = (ramp: [number, string][]): string =>
   `linear-gradient(to right, ${ramp.map(([, color]) => color).join(", ")})`;
 
+export function worryLabel(weight: number): string {
+  if (weight === 0) return "Not at all";
+  if (weight <= 0.3) return "A little";
+  if (weight <= 0.7) return "Moderately";
+  return "A lot";
+}
+
 export function MapControls({
   mode,
   competitionWeight,
+  variant,
   onModeChange,
   onCompetitionWeightChange,
 }: MapControlsProps): React.JSX.Element {
   const legend = LEGEND[mode];
   return (
-    <section className="map-controls" aria-label="Map controls">
+    <section className={`map-controls map-controls-${variant}`} aria-label="Map controls">
       <div className="segmented" role="group" aria-label="Map layer">
         {(["audience", "opportunity"] as const).map((option) => (
           <button
@@ -42,19 +51,19 @@ export function MapControls({
       </div>
 
       <label className="slider">
-        <span>How much does competition worry you?</span>
+        <span className="slider-head">
+          <span>How much does competition worry you?</span>
+          <strong>{worryLabel(competitionWeight)}</strong>
+        </span>
         <input
           type="range"
           min={0}
           max={1}
           step={0.05}
           value={competitionWeight}
+          aria-valuetext={worryLabel(competitionWeight)}
           onChange={(event) => onCompetitionWeightChange(Number(event.target.value))}
         />
-        <span className="slider-scale muted">
-          <span>Not at all</span>
-          <span>A lot</span>
-        </span>
       </label>
 
       <div className="legend">
@@ -73,6 +82,10 @@ export function MapControls({
         <div className="legend-item">
           <span className="legend-zone" aria-hidden="true" />
           Top zone
+        </div>
+        <div className="legend-item">
+          <span className="legend-excluded" aria-hidden="true" />
+          Excluded area
         </div>
       </div>
     </section>

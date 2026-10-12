@@ -1,7 +1,10 @@
 import { CITIES, type Anchor, type TraceStep } from "@whitespace/shared";
 
 export type RunStatus =
-  { kind: "idle" } | { kind: "running" } | { kind: "done" } | { kind: "error"; message: string };
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "done"; ms: number }
+  | { kind: "error"; message: string };
 
 export interface ConceptPanelProps {
   badge: React.ReactNode;
@@ -10,9 +13,39 @@ export interface ConceptPanelProps {
   anchors: readonly Anchor[] | undefined;
   status: RunStatus;
   liveSteps: readonly TraceStep[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onConceptChange: (concept: string) => void;
   onCityChange: (cityId: string) => void;
   onRun: () => void;
+}
+
+const UNITS: Record<string, [string, string]> = {
+  "urn:heatmap": ["map cell", "map cells"],
+  "urn:entity:place": ["place", "places"],
+};
+
+function stepCount(step: TraceStep): string {
+  const [one, many] = UNITS[step.params["filter.type"] ?? ""] ?? ["result", "results"];
+  return `${step.resultCount.toLocaleString("en-US")} ${step.resultCount === 1 ? one : many}`;
+}
+
+function Progress({ steps, running }: { steps: readonly TraceStep[]; running: boolean }) {
+  return (
+    <ol className="progress" aria-label="Analysis progress">
+      {steps.map((step) => (
+        <li key={step.id} className="progress-done">
+          <span className="progress-label">{step.label}</span>
+          <span className="muted">{stepCount(step)}</span>
+        </li>
+      ))}
+      {running && (
+        <li className="progress-pending">
+          <span className="progress-label">{steps.length === 0 ? "Asking Qloo" : "Working"}</span>
+        </li>
+      )}
+    </ol>
+  );
 }
 
 export function ConceptPanel({
@@ -22,19 +55,31 @@ export function ConceptPanel({
   anchors,
   status,
   liveSteps,
+  collapsed,
+  onToggleCollapsed,
   onConceptChange,
   onCityChange,
   onRun,
 }: ConceptPanelProps): React.JSX.Element {
   const running = status.kind === "running";
-  const lastStep = liveSteps.at(-1);
+  const city = CITIES.find((option) => option.id === cityId);
   return (
-    <section className="panel panel-left" aria-label="Concept">
+    <section className={`panel panel-left${collapsed ? " is-collapsed" : ""}`} aria-label="Concept">
       <header className="brand">
         <span className="brand-mark" aria-hidden="true" />
         <h1>Whitespace</h1>
         {badge}
+        <button
+          type="button"
+          className="collapse-toggle link-button"
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? "Edit" : "Hide"}
+        </button>
       </header>
+      {collapsed && city && <p className="collapsed-summary small muted">{city.name}</p>}
+
       <p className="tagline">Where your audience already is, and your competitors are not.</p>
 
       <label className="field">
@@ -80,13 +125,18 @@ export function ConceptPanel({
         </div>
       )}
 
-      <p className="status small" role="status" aria-live="polite">
-        {running &&
-          (lastStep
-            ? `Asking Qloo · ${liveSteps.length} ${liveSteps.length === 1 ? "call" : "calls"} · ${lastStep.label}`
-            : "Asking Qloo…")}
-        {status.kind === "error" && <span className="error">{status.message}</span>}
-      </p>
+      <div className="status small" role="status" aria-live="polite">
+        {(running || liveSteps.length > 0) && status.kind !== "error" && (
+          <Progress steps={liveSteps} running={running} />
+        )}
+        {status.kind === "done" && (
+          <p className="muted">
+            Done in {(status.ms / 1000).toFixed(1)} s · {liveSteps.length} Qloo{" "}
+            {liveSteps.length === 1 ? "call" : "calls"}
+          </p>
+        )}
+        {status.kind === "error" && <p className="error">{status.message}</p>}
+      </div>
     </section>
   );
 }

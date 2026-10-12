@@ -9,9 +9,16 @@ import { cellPolygon, type PlaceRef, type ScoredCell, type Zone } from "@whitesp
 
 export type LayerMode = "audience" | "opportunity";
 
-export const SOURCES = { cells: "cells", competitors: "competitors", zones: "zones" } as const;
+export const SOURCES = {
+  cells: "cells",
+  competitors: "competitors",
+  zones: "zones",
+  excluded: "excluded",
+} as const;
 export const LAYERS = {
   cells: "cells-fill",
+  excludedFill: "excluded-fill",
+  excludedLine: "excluded-line",
   zonesFill: "zones-fill",
   zonesLine: "zones-line",
   competitors: "competitors-circle",
@@ -34,6 +41,9 @@ export const OPPORTUNITY_RAMP: [number, string][] = [
 ];
 
 const INK = "#1f2328";
+const MUTED = "#5f6670";
+const HATCH = "hatch";
+const HATCH_SIZE = 8;
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 function ramp(property: string, stops: [number, string][]): ExpressionSpecification {
@@ -101,15 +111,43 @@ export function competitorsGeoJSON(places: readonly PlaceRef[]): FeatureCollecti
 export function zonesGeoJSON(
   zones: readonly Zone[],
   selectedId: string | undefined,
+  hoveredId: string | undefined,
 ): FeatureCollection<Polygon> {
   return {
     type: "FeatureCollection",
     features: zones.map((zone): Feature<Polygon> => ({
       type: "Feature",
       geometry: zone.polygon,
-      properties: { id: zone.id, rank: zone.rank, selected: zone.id === selectedId },
+      properties: {
+        id: zone.id,
+        rank: zone.rank,
+        selected: zone.id === selectedId,
+        highlighted: zone.id === selectedId || zone.id === hoveredId,
+      },
     })),
   };
+}
+
+export function excludedGeoJSON(polygons: readonly Polygon[]): FeatureCollection<Polygon> {
+  return {
+    type: "FeatureCollection",
+    features: polygons.map((polygon): Feature<Polygon> => ({
+      type: "Feature",
+      geometry: polygon,
+      properties: {},
+    })),
+  };
+}
+
+function hatchPattern(): { width: number; height: number; data: Uint8Array } {
+  const data = new Uint8Array(HATCH_SIZE * HATCH_SIZE * 4);
+  for (let y = 0; y < HATCH_SIZE; y += 1) {
+    for (let x = 0; x < HATCH_SIZE; x += 1) {
+      if ((x + y) % HATCH_SIZE > 1) continue;
+      data.set([95, 102, 112, 150], (y * HATCH_SIZE + x) * 4);
+    }
+  }
+  return { width: HATCH_SIZE, height: HATCH_SIZE, data };
 }
 
 export function installLayers(map: MapLibreMap): void {
@@ -130,13 +168,26 @@ export function installLayers(map: MapLibreMap): void {
     },
     firstLabel,
   );
+  map.addImage(HATCH, hatchPattern(), { pixelRatio: 2 });
+  map.addLayer({
+    id: LAYERS.excludedFill,
+    type: "fill",
+    source: SOURCES.excluded,
+    paint: { "fill-pattern": HATCH, "fill-opacity": 0.9 },
+  });
+  map.addLayer({
+    id: LAYERS.excludedLine,
+    type: "line",
+    source: SOURCES.excluded,
+    paint: { "line-color": MUTED, "line-width": 1.5, "line-dasharray": [2, 2] },
+  });
   map.addLayer({
     id: LAYERS.zonesFill,
     type: "fill",
     source: SOURCES.zones,
     paint: {
       "fill-color": INK,
-      "fill-opacity": ["case", ["boolean", ["get", "selected"], false], 0.1, 0.04],
+      "fill-opacity": ["case", ["boolean", ["get", "highlighted"], false], 0.1, 0.04],
     },
   });
   map.addLayer({
@@ -146,7 +197,7 @@ export function installLayers(map: MapLibreMap): void {
     layout: { "line-join": "round" },
     paint: {
       "line-color": INK,
-      "line-width": ["case", ["boolean", ["get", "selected"], false], 4, 2.5],
+      "line-width": ["case", ["boolean", ["get", "highlighted"], false], 4, 2.5],
     },
   });
   map.addLayer({

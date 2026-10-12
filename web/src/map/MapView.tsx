@@ -10,12 +10,14 @@ import {
 } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { Polygon } from "geojson";
 import type { BBox, PlaceRef, ScoredCell, Zone } from "@whitespace/shared";
 import {
   LAYERS,
   SOURCES,
   cellsGeoJSON,
   competitorsGeoJSON,
+  excludedGeoJSON,
   installLayers,
   setLayerMode,
   setSourceData,
@@ -40,15 +42,17 @@ export interface MapViewProps {
   cells: readonly ScoredCell[];
   competitors: readonly PlaceRef[];
   zones: readonly Zone[];
+  excluded: readonly Polygon[];
   mode: LayerMode;
   selectedZoneId: string | undefined;
+  hoveredZoneId: string | undefined;
   onSelectZone: (zoneId: string) => void;
 }
 
-function focusPadding(width: number) {
+function focusPadding(width: number, height: number) {
   return width >= 960
     ? { top: 56, bottom: 200, left: 400, right: 460 }
-    : { top: 220, bottom: 260, left: 24, right: 24 };
+    : { top: 88, bottom: Math.round(height * 0.4) + 24, left: 24, right: 24 };
 }
 
 export function MapView({
@@ -56,8 +60,10 @@ export function MapView({
   cells,
   competitors,
   zones,
+  excluded,
   mode,
   selectedZoneId,
+  hoveredZoneId,
   onSelectZone,
 }: MapViewProps): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
@@ -90,7 +96,7 @@ export function MapView({
       maxWidth: "260px",
     });
 
-    const onMove = (event: MapMouseEvent) => {
+    const showTip = (event: MapMouseEvent): boolean => {
       const [hit] = instance.queryRenderedFeatures(event.point, {
         layers: [LAYERS.competitors, LAYERS.cells],
       });
@@ -100,21 +106,29 @@ export function MapView({
           : hit
             ? describeCell(hit.properties, modeRef.current)
             : undefined;
-      const overZone =
-        instance.queryRenderedFeatures(event.point, { layers: [LAYERS.zonesFill] }).length > 0;
-      instance.getCanvas().style.cursor =
-        hit?.layer.id === LAYERS.competitors || overZone ? "pointer" : "";
       if (!lines) {
         tip.remove();
-        return;
+        return false;
       }
       tip.setLngLat(event.lngLat).setDOMContent(tipElement(lines)).addTo(instance);
+      return hit?.layer.id === LAYERS.competitors;
+    };
+
+    const zoneAt = (event: MapMouseEvent): string | undefined => {
+      const [zone] = instance.queryRenderedFeatures(event.point, { layers: [LAYERS.zonesFill] });
+      const id = zone?.properties.id;
+      return typeof id === "string" ? id : undefined;
+    };
+
+    const onMove = (event: MapMouseEvent) => {
+      const overCompetitor = showTip(event);
+      instance.getCanvas().style.cursor = overCompetitor || zoneAt(event) ? "pointer" : "";
     };
 
     const onClick = (event: MapMouseEvent) => {
-      const [zone] = instance.queryRenderedFeatures(event.point, { layers: [LAYERS.zonesFill] });
-      const id = zone?.properties.id;
-      if (typeof id === "string") selectRef.current(id);
+      showTip(event);
+      const id = zoneAt(event);
+      if (id) selectRef.current(id);
     };
 
     instance.on("load", () => {
@@ -150,14 +164,26 @@ export function MapView({
   }, [ready, competitors]);
 
   useEffect(() => {
+    if (ready && map.current) {
+      setSourceData(map.current, SOURCES.excluded, excludedGeoJSON(excluded));
+    }
+  }, [ready, excluded]);
+
+  useEffect(() => {
     const instance = map.current;
     if (!ready || !instance) return;
-    setSourceData(instance, SOURCES.zones, zonesGeoJSON(zones, selectedZoneId));
+    setSourceData(instance, SOURCES.zones, zonesGeoJSON(zones, selectedZoneId, hoveredZoneId));
     markers.current.forEach((marker) => marker.remove());
     markers.current = zones.map((zone) => {
       const element = document.createElement("button");
       element.type = "button";
-      element.className = `zone-marker${zone.id === selectedZoneId ? " is-selected" : ""}`;
+      element.className = [
+        "zone-marker",
+        zone.id === selectedZoneId ? "is-selected" : "",
+        zone.id === hoveredZoneId ? "is-hovered" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
       element.textContent = String(zone.rank);
       element.setAttribute("aria-label", `Zone ${zone.rank}`);
       element.addEventListener("click", (event) => {
@@ -166,13 +192,14 @@ export function MapView({
       });
       return new Marker({ element }).setLngLat(zone.centroid).addTo(instance);
     });
-  }, [ready, zones, selectedZoneId]);
+  }, [ready, zones, selectedZoneId, hoveredZoneId]);
 
   useEffect(() => {
     const instance = map.current;
     if (!ready || !instance) return;
+    const { clientWidth, clientHeight } = instance.getContainer();
     instance.fitBounds(focus.bbox as LngLatBoundsLike, {
-      padding: focusPadding(instance.getContainer().clientWidth),
+      padding: focusPadding(clientWidth, clientHeight),
       duration: 1200,
       maxZoom: 14.5,
     });

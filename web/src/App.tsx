@@ -62,6 +62,9 @@ export function App(): React.JSX.Element {
   );
   const [excluded, setExcluded] = useState<Polygon[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string>();
+  const [hoveredZoneId, setHoveredZoneId] = useState<string>();
+  const [conceptCollapsed, setConceptCollapsed] = useState(false);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const [focus, setFocus] = useState<MapFocus>({ key: "start", bbox: DEFAULT_CITY.bbox });
   const running = useRef<AbortController | null>(null);
 
@@ -92,6 +95,7 @@ export function App(): React.JSX.Element {
     setLiveSteps([]);
     setExcluded([]);
     setSelectedZoneId(undefined);
+    setConceptCollapsed(false);
     setFocus({ key: `city-${nextId}`, bbox: next.bbox });
   };
 
@@ -104,6 +108,8 @@ export function App(): React.JSX.Element {
     setLiveSteps([]);
     setExcluded([]);
     setSelectedZoneId(undefined);
+    setSheetExpanded(false);
+    const started = performance.now();
     try {
       const next = await streamScout(
         { concept, cityId, anchors: scenario.anchors, categoryTags: scenario.categoryTags },
@@ -113,7 +119,8 @@ export function App(): React.JSX.Element {
         controller.signal,
       );
       setResult(next);
-      setStatus({ kind: "done" });
+      setStatus({ kind: "done", ms: performance.now() - started });
+      setConceptCollapsed(true);
       setFocus({
         key: `result-${Date.now()}`,
         bbox: polygonsBBox(next.zones.map((zone) => zone.polygon)) ?? next.city.bbox,
@@ -132,6 +139,7 @@ export function App(): React.JSX.Element {
       const zone = view?.zones.find((candidate) => candidate.id === zoneId);
       if (!zone) return;
       setSelectedZoneId(zoneId);
+      setSheetExpanded(false);
       const bbox = polygonsBBox([zone.polygon]);
       if (bbox) setFocus({ key: `zone-${zoneId}-${Date.now()}`, bbox });
     },
@@ -141,17 +149,20 @@ export function App(): React.JSX.Element {
   const excludeZone = (zone: Zone) => {
     setExcluded((current) => [...current, zone.polygon]);
     setSelectedZoneId(undefined);
+    setHoveredZoneId(undefined);
   };
 
   return (
-    <div className="app">
+    <div className={`app${view && result ? " has-sheet" : ""}`}>
       <MapView
         focus={focus}
         cells={view?.cells ?? []}
         competitors={result?.competitors ?? []}
         zones={view?.zones ?? []}
+        excluded={excluded}
         mode={mode}
         selectedZoneId={selectedZoneId}
+        hoveredZoneId={hoveredZoneId}
         onSelectZone={selectZone}
       />
 
@@ -162,6 +173,8 @@ export function App(): React.JSX.Element {
         anchors={scenario?.anchors}
         status={status}
         liveSteps={liveSteps}
+        collapsed={conceptCollapsed}
+        onToggleCollapsed={() => setConceptCollapsed((current) => !current)}
         onConceptChange={setConcept}
         onCityChange={changeCity}
         onRun={() => void run()}
@@ -169,21 +182,55 @@ export function App(): React.JSX.Element {
 
       {view && result && (
         <>
-          <section className="panel panel-right" aria-label="Zones">
-            <h2>Top zones in {result.city.name}</h2>
+          <section
+            className={`panel panel-right${sheetExpanded ? " is-expanded" : ""}`}
+            aria-label="Zones"
+          >
+            <button
+              type="button"
+              className="sheet-handle"
+              aria-expanded={sheetExpanded}
+              onClick={() => setSheetExpanded((current) => !current)}
+            >
+              <span className="sheet-grip" aria-hidden="true" />
+              {sheetExpanded ? "Show map" : "Show all zones"}
+            </button>
+            <header className="zones-header">
+              <h2>Top zones in {result.city.name}</h2>
+              <p className="muted small">
+                {view.zones.length} {view.zones.length === 1 ? "zone" : "zones"} ·{" "}
+                {result.competitors.length} similar venues ·{" "}
+                {result.cells.length.toLocaleString("en-US")} map cells
+              </p>
+            </header>
             {result.demo && (
               <p className="notice small">
                 Demo data: recorded or synthetic responses, not a live Qloo call.
               </p>
             )}
-            <ZoneCards
-              zones={view.zones}
-              selectedZoneId={selectedZoneId}
-              excludedCount={excluded.length}
-              onSelect={selectZone}
-              onExclude={excludeZone}
-              onResetExclusions={() => setExcluded([])}
+            <MapControls
+              variant="sheet"
+              mode={mode}
+              competitionWeight={competitionWeight}
+              onModeChange={setMode}
+              onCompetitionWeightChange={setCompetitionWeight}
             />
+            {result.cells.length === 0 ? (
+              <p className="muted">
+                Qloo returned no taste data for {result.city.name}.
+                {result.demo ? " In demo mode only Austin has data." : " Try another city."}
+              </p>
+            ) : (
+              <ZoneCards
+                zones={view.zones}
+                selectedZoneId={selectedZoneId}
+                excludedCount={excluded.length}
+                onSelect={selectZone}
+                onHover={setHoveredZoneId}
+                onExclude={excludeZone}
+                onResetExclusions={() => setExcluded([])}
+              />
+            )}
             <p className="muted small">
               Taste match is a first filter, not a full site analysis. Check rent, foot traffic and
               visit in person.
@@ -192,6 +239,7 @@ export function App(): React.JSX.Element {
           </section>
 
           <MapControls
+            variant="floating"
             mode={mode}
             competitionWeight={competitionWeight}
             onModeChange={setMode}
