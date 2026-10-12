@@ -11,7 +11,16 @@ export interface Config {
   demoMode: boolean;
   cacheDir: string;
   fixturesDir: string;
+  webDist: string;
+  trustProxy: boolean;
+  scoutBurst: number;
+  scoutPerMinute: number;
 }
+
+const positive = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   return {
@@ -21,5 +30,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     demoMode: env.DEMO_MODE === "true",
     cacheDir: env.QLOO_CACHE_DIR || resolve(API_ROOT, "recordings"),
     fixturesDir: env.FIXTURES_DIR || resolve(API_ROOT, "fixtures"),
+    webDist: env.WEB_DIST || resolve(API_ROOT, "../web/dist"),
+    trustProxy: env.TRUST_PROXY !== "false",
+    scoutBurst: positive(env.SCOUT_LIMIT_BURST, 8),
+    scoutPerMinute: positive(env.SCOUT_LIMIT_PER_MINUTE, 3),
   };
 }

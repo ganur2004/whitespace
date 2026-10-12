@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import type { Anchor, ScoutEvent } from "@whitespace/shared";
+import type { Anchor, ScoutEvent, ScoutResult } from "@whitespace/shared";
+import { clientAddress, type IpRateLimiter } from "../limits.js";
 import { QlooError, type QlooClient } from "../qloo/client.js";
 import { QlooParamError } from "../qloo/params.js";
 import { ScoutInputError, runScout, type ScoutInput } from "../scout/pipeline.js";
@@ -65,7 +66,12 @@ function describeFailure(error: unknown): { status: 400 | 502 | 500; message: st
   return { status: 500, message: "Something went wrong while analysing this city." };
 }
 
-export function scoutRoutes(qloo: QlooClient): Hono {
+export interface ScoutRouteOptions {
+  limiter: IpRateLimiter;
+  trustProxy: boolean;
+}
+
+export function scoutRoutes(qloo: QlooClient, options: ScoutRouteOptions): Hono {
   const routes = new Hono();
 
   routes.post("/api/scout", async (c: Context) => {
@@ -75,12 +81,39 @@ export function scoutRoutes(qloo: QlooClient): Hono {
     }
     const input = toInput(parsed.data);
 
+    const client = clientAddress(c, options.trustProxy);
+    const verdict = options.limiter.take(client);
+    if (!verdict.ok) {
+      c.header("Retry-After", String(verdict.retryAfterSeconds));
+      return c.json(
+        {
+          error: `Too many analyses from this address. Try again in ${verdict.retryAfterSeconds} s.`,
+        },
+        429,
+      );
+    }
+
+    const started = Date.now();
+    const finish = (result: ScoutResult): ScoutResult => {
+      const live = result.trace.filter((step) => !step.cached).length;
+      if (live === 0) options.limiter.refund(client);
+      console.log(
+        `scout city=${input.cityId} ms=${Date.now() - started} calls=${result.trace.length} live=${live} zones=${result.zones.length}${result.demo ? " demo" : ""}`,
+      );
+      return result;
+    };
+    const fail = (error: unknown) => {
+      const failure = describeFailure(error);
+      if (failure.status === 400) options.limiter.refund(client);
+      else console.error("scout failed", error);
+      return failure;
+    };
+
     if (c.req.query("format") === "json") {
       try {
-        return c.json(await runScout(input, qloo));
+        return c.json(finish(await runScout(input, qloo)));
       } catch (error) {
-        const failure = describeFailure(error);
-        if (failure.status !== 400) console.error("scout failed", error);
+        const failure = fail(error);
         return c.json({ error: failure.message }, failure.status);
       }
     }
@@ -93,11 +126,9 @@ export function scoutRoutes(qloo: QlooClient): Hono {
         );
       };
       try {
-        await runScout(input, qloo, send);
+        finish(await runScout(input, qloo, send));
       } catch (error) {
-        const failure = describeFailure(error);
-        if (failure.status !== 400) console.error("scout failed", error);
-        send({ type: "error", message: failure.message });
+        send({ type: "error", message: fail(error).message });
       }
       await pending;
     });
