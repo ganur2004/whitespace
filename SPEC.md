@@ -813,7 +813,7 @@ Full spec: SPEC.md. Read the relevant section before changing code.
 - Run npm test and npm run lint before finishing a task
 
 ## Git
-- Never work on or push to main; create a separate branch for each task
+- Work directly on main; create a branch only when asked
 - No git push without an explicit request
 - Never use git push --force or git reset --hard
 - Never delete files without confirmation

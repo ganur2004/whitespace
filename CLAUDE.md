@@ -32,7 +32,7 @@ Full spec: SPEC.md. Read the relevant section before changing code.
 - Hosting must not sleep: the demo has to answer judges until 2026-11-16; the per-IP limit on /api/scout refunds answers served entirely from cache
 
 ## Git
-- Never work on or push to main; create a separate branch for each task
+- Work directly on main; create a branch only when asked
 - No git push without an explicit request
 - Never use git push --force or git reset --hard
 - Never delete files without confirmation
