@@ -15,6 +15,18 @@ Full spec: SPEC.md. Read the relevant section before changing code.
 - User-facing text in English
 - Run npm test and npm run lint before finishing a task
 
+## Commands
+- npm run dev: api on :8787 and web on :5173 (Vite proxies /api and /health to the api)
+- npm run demo: the same with DEMO_MODE=true
+- npm test, npm run lint, npm run typecheck, npm run build
+- npm run fixtures: regenerates api/fixtures deterministically from scripts/make-fixtures.ts
+
+## Setup quirks
+- @whitespace/shared exports a "development" condition pointing at src: tsx runs with --conditions=development and Vite picks it up in dev; builds and node use dist. postinstall builds shared so editors see its types
+- The api dev script pins PORT=8787 because the Vite proxy targets it; PORT from the environment is for hosting platforms
+- MapLibre's worker is imported with ?worker&url and passed to setWorkerUrl, and maplibre-gl stays out of optimizeDeps; otherwise the production build ships without the worker
+- The first map load in dev is slow while Vite transforms the worker
+
 ## Git
 - Never work on or push to main; create a separate branch for each task
 - No git push without an explicit request
