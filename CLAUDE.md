@@ -20,12 +20,16 @@ Full spec: SPEC.md. Read the relevant section before changing code.
 - npm run demo: the same with DEMO_MODE=true
 - npm test, npm run lint, npm run typecheck, npm run build
 - npm run fixtures: regenerates api/fixtures deterministically from scripts/make-fixtures.ts
+- npm run docker:build, then docker run -p 8090:8080 -e DEMO_MODE=true whitespace: the production container (docs/DEPLOY.md)
+- npm run smoke -- <url> and npm run warm -- <url>: check and warm a running server
 
 ## Setup quirks
 - @whitespace/shared exports a "development" condition pointing at src: tsx runs with --conditions=development and Vite picks it up in dev; builds and node use dist. postinstall builds shared so editors see its types
 - The api dev script pins PORT=8787 because the Vite proxy targets it; PORT from the environment is for hosting platforms
 - MapLibre's worker is imported with ?worker&url and passed to setWorkerUrl, and maplibre-gl stays out of optimizeDeps; otherwise the production build ships without the worker
 - The first map load in dev is slow while Vite transforms the worker
+- @hono/node-server's serveStatic calls onFound after it builds the response, so headers set there are lost; cache headers are set in a middleware after next()
+- Hosting must not sleep: the demo has to answer judges until 2026-11-16; the per-IP limit on /api/scout refunds answers served entirely from cache
 
 ## Git
 - Never work on or push to main; create a separate branch for each task
