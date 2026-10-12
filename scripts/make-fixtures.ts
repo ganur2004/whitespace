@@ -1,0 +1,148 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import ngeohash from "ngeohash";
+import { distanceMeters, findCity, type LonLat } from "@whitespace/shared";
+
+const SEED = 20261012;
+const GENERATED_AT = "2026-10-12T00:00:00.000Z";
+const PRECISION = 7;
+const RADIUS_M = 3200;
+const HOLE_SHARE = 0.08;
+const OUTPUT_DIR = resolve(import.meta.dirname, "../api/fixtures");
+const SYNTHETIC_LOCALITY_ID = "00000000-0000-4000-8000-000000000001";
+
+interface Hotspot {
+  eastM: number;
+  northM: number;
+  strength: number;
+  spreadM: number;
+}
+
+const TASTE_HOTSPOTS: Hotspot[] = [
+  { eastM: 2100, northM: 300, strength: 1, spreadM: 650 },
+  { eastM: -200, northM: -2200, strength: 0.85, spreadM: 550 },
+  { eastM: 600, northM: 2500, strength: 0.75, spreadM: 600 },
+  { eastM: 0, northM: 0, strength: 0.6, spreadM: 450 },
+];
+
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function offset([lon, lat]: LonLat, eastM: number, northM: number): LonLat {
+  const metersPerDegreeLat = 111_320;
+  const metersPerDegreeLon = metersPerDegreeLat * Math.cos((lat * Math.PI) / 180);
+  return [lon + eastM / metersPerDegreeLon, lat + northM / metersPerDegreeLat];
+}
+
+function percentiles(values: number[]): number[] {
+  const order = values.map((value, index) => ({ value, index })).sort((a, b) => b.value - a.value);
+  const result = new Array<number>(values.length).fill(0);
+  order.forEach(({ index }, rank) => {
+    result[index] = 1 - rank / values.length;
+  });
+  return result;
+}
+
+const round = (value: number, digits = 6): number => Number(value.toFixed(digits));
+
+function buildHeatmap(center: LonLat) {
+  const random = mulberry32(SEED);
+  const [minLat, minLon, maxLat, maxLon] = ngeohash.decode_bbox(
+    ngeohash.encode(center[1], center[0], PRECISION),
+  );
+  const stepLat = maxLat - minLat;
+  const stepLon = maxLon - minLon;
+  const [westLon, southLat] = offset(center, -RADIUS_M, -RADIUS_M);
+  const [eastLon, northLat] = offset(center, RADIUS_M, RADIUS_M);
+
+  const hotspots = TASTE_HOTSPOTS.map((spot) => ({
+    ...spot,
+    point: offset(center, spot.eastM, spot.northM),
+  }));
+
+  const seen = new Set<string>();
+  const cells: { geohash: string; point: LonLat; taste: number; reach: number }[] = [];
+  for (let lat = southLat; lat <= northLat; lat += stepLat) {
+    for (let lon = westLon; lon <= eastLon; lon += stepLon) {
+      const geohash = ngeohash.encode(lat, lon, PRECISION);
+      if (seen.has(geohash)) continue;
+      seen.add(geohash);
+      const decoded = ngeohash.decode(geohash);
+      const point: LonLat = [decoded.longitude, decoded.latitude];
+      const fromCenter = distanceMeters(point, center);
+      if (fromCenter > RADIUS_M || random() < HOLE_SHARE) continue;
+      const taste = hotspots.reduce((sum, spot) => {
+        const d = distanceMeters(point, spot.point);
+        return sum + spot.strength * Math.exp(-(d * d) / (2 * spot.spreadM * spot.spreadM));
+      }, 0.15 * random());
+      const reach = Math.exp(-(fromCenter * fromCenter) / (2 * 1800 * 1800)) + 0.25 * random();
+      cells.push({ geohash, point, taste, reach });
+    }
+  }
+
+  const affinity = percentiles(cells.map((cell) => cell.taste));
+  const popularity = percentiles(cells.map((cell) => cell.reach));
+  const order = affinity
+    .map((value, index) => ({ value, index }))
+    .sort((a, b) => b.value - a.value);
+
+  return {
+    success: true,
+    results: {
+      heatmap: order.map(({ index }, rank) => {
+        const cell = cells[index]!;
+        return {
+          location: {
+            latitude: round(cell.point[1]),
+            longitude: round(cell.point[0]),
+            geohash: cell.geohash,
+          },
+          query: {
+            affinity: round(affinity[index]!),
+            affinity_rank: round(1 - (rank + 1) / (cells.length + 1)),
+            popularity: round(popularity[index]!),
+          },
+        };
+      }),
+    },
+    query: {
+      localities: {
+        filter: {
+          entity_id: SYNTHETIC_LOCALITY_ID,
+          name: "Austin (synthetic)",
+          subtype: "urn:entity:locality",
+          location: { lat: center[0], lng: center[1] },
+          popularity: 1,
+          disambiguation: "Synthetic locality for tests and demo mode",
+        },
+      },
+    },
+    duration: 0,
+  };
+}
+
+async function main(): Promise<void> {
+  const city = findCity("austin");
+  if (!city) throw new Error("Austin is missing from shared/src/cities.ts");
+  const response = buildHeatmap(city.center);
+  await mkdir(OUTPUT_DIR, { recursive: true });
+  const file = {
+    synthetic: true,
+    generatedAt: GENERATED_AT,
+    description:
+      "Generated by scripts/make-fixtures.ts. Not Qloo data: an Austin-shaped grid with planted taste hotspots, in the documented heatmap response format.",
+    response,
+  };
+  await writeFile(resolve(OUTPUT_DIR, "heatmap.json"), `${JSON.stringify(file)}\n`);
+  console.log(`heatmap.json: ${response.results.heatmap.length} synthetic cells`);
+}
+
+await main();

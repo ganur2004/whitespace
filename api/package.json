@@ -1,0 +1,21 @@
+{
+  "name": "@whitespace/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "PORT=8787 tsx watch --conditions=development --env-file-if-exists=../.env src/index.ts",
+    "start": "node --env-file-if-exists=../.env dist/index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.4",
+    "@whitespace/shared": "*",
+    "hono": "^4.13.13",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.8"
+  }
+}
