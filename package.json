@@ -25,7 +25,11 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc --build",
-    "fixtures": "tsx --conditions=development scripts/make-fixtures.ts"
+    "fixtures": "tsx --conditions=development scripts/make-fixtures.ts",
+    "start": "node --env-file-if-exists=.env api/dist/index.js",
+    "smoke": "tsx --conditions=development scripts/smoke.ts",
+    "warm": "tsx --conditions=development scripts/warm.ts",
+    "docker:build": "docker build -t whitespace ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

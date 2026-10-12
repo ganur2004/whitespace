@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/dist-types
+**/*.tsbuildinfo
+api/recordings
+.env
+.env.*
+.git
+.github
+.claude
+docs
+*.md
+**/test
