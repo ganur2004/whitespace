@@ -11,6 +11,7 @@ Full spec: SPEC.md. Read the relevant section before changing code.
 - DEMO_MODE must work from recordings or synthetic fixtures and be clearly labeled in the UI
 - Qloo silently ignores unknown parameters: the client only sends parameters from its per-filter.type allowlist
 - Qloo API reference that the docs site won't serve to tools: docs/QLOO-NOTES.md
+- Qloo allows 5 requests/s and 10,000 requests/month: reuse cached responses in api/recordings, never loop live calls in tests or scripts
 - The live demo must keep working until judging ends on 2026-11-16
 - User-facing text in English
 - Run npm test and npm run lint before finishing a task

@@ -189,23 +189,71 @@ curl -sG "$Q/v2/insights" -H "X-Api-Key: $QLOO_API_KEY" --data-urlencode "filter
 curl -sG "$Q/v2/insights" -H "X-Api-Key: $QLOO_API_KEY" --data-urlencode "filter.type=urn:demographics" --data-urlencode "signal.interests.entities=<ID1>,<ID2>,<ID3>" -o api/recordings/demographics-ramen.json
 ```
 
-## Проверено на S0
+## Проверено на S0 (13 октября 2026)
 
-Заполнить по итогам S0: пути к полям мест, поле совпадения, лимиты, решения по экспериментам E1–E7, список городов с `localityId`.
+Живые запросы к `hackathon.api.qloo.com`, около 30 запросов на разведку. Сырые ответы лежат локально в `api/recordings/s0/` и в git не попадают.
 
-### Предварительный формат мест
+### Лимиты
 
-Пока формат не проверен, `parsePlaces` в `api/src/qloo/types.ts` и синтетический `api/fixtures/places.json` используют такие пути. На S0 сверить с живым ответом и поправить оба места:
+- Заголовки ответа: `x-second-ratelimit-limit: 5`, **`x-month-ratelimit-limit: 10000`**, плюс `-remaining` и `-reset`.
+- То есть **5 запросов в секунду и 10 000 в месяц.** Клиент держит 4 запроса в секунду. Анализ одного города — 3–5 запросов, повторы берутся из кэша на диске. Если квоты станет мало, просить в Discord `#api-help`.
 
-| Что | Путь сейчас |
+### Тепловая карта
+
+- `results.heatmap[]`: `location.{latitude, longitude, geohash}` и `query.affinity`, `affinity_rank`, `popularity`, плюс **разбивка по типам якорей**: `entity_place_affinity`, `entity_brand_affinity`, `entity_artist_affinity` и их `_rank` (могут быть `null`, если якорей такого типа нет).
+- `affinity` — равномерный процентиль от 0 до 1.
+- **`query.localities.filter` — массив**, а не объект, как в документации. Внутри `location: { lat, lon }` в правильном порядке (в документации было `{ lat, lng }` и перепутано). При запросе по ID локальности `query.localities` нет вовсе.
+- Запрос по ID локальности (`filter.location=<UUID>`) даёт ровно ту же карту, что и по названию.
+- Остин — 1653 ячейки, Бруклин — 2166, Чикаго — 2574–2755 (зависит от якорей). Везде geohash-7. Ответ 0.4–1 МБ, 2–3 с.
+- `output.heatmap.boundary=urn:entity:locality` отвечает `500 System Error` (E7 недоступен).
+
+### Места
+
+| Что | Путь |
 |---|---|
-| Список мест | `results.entities[]` |
-| ID и название | `entity_id`, `name` |
-| Координаты | `location.lat`, `location.lon` (без них место пропускается) |
-| Район | `properties.neighborhood` |
-| Ценовой уровень | `properties.price_level` |
-| Теги | `tags[].id` или `tags[].tag_id` |
-| Совпадение со вкусом | `query.affinity` |
-| Объяснение | любые массивы `{ entity_id, score }` внутри `query.explainability` |
+| Список | `results.entities[]` в insights, `results[]` в `/search` |
+| ID, название | `entity_id`, `name` |
+| Координаты | `location.lat`, `location.lon` (+ `geohash` из 12 символов) |
+| Район | `properties.neighborhood`, **часто `null`**; запасной вариант `properties.geocode.name`, если он не равен городу |
+| Ценовой уровень | `properties.price_level` (1–4) |
+| Жанр | `properties.primary_genre.id`, например `urn:tag:genre:place:restaurant:ramen` |
+| Теги | `tags[]`: в insights поле `id`, в `/search` — `tag_id`; у каждого есть `type`. Около 150 тегов на место, `parsePlaces` оставляет около 50 полезных типов |
+| Совпадение со вкусом | `query.affinity`, только когда есть сигнал |
+| Объяснение | `query.explainability["signal.interests.entities"] = [{ entity_id, score }]`; сводка по выдаче — `query.explainability["signal.interests.entities"].effect_on_top3_recs` и т. п. |
 
-Демо-сценарий в `shared/src/scenarios.ts` пока использует синтетические ID якорей и тега. После S0 заменить их на реальные ID из `/search` и `/v2/tags`.
+- Без сигнала у места в `query` только `distance` и `measurements`.
+- Пагинация работает (`take` + `page`). `offset` за пределами выдачи даёт пустой ответ.
+- Рамен-мест (`urn:tag:genre:place:restaurant:ramen`) в границах локальности: Остин 20, Бруклин 59, Чикаго 41.
+- `filter.results.entities` + сигнал возвращают совпадение для заданных мест, но **якоря-места в выдачу не попадают** (17 из 20 в Остине). Такие конкуренты получают полный вес.
+- Совпадение конкурентов узкое, 0.80–0.95, поэтому вес `0.5 + 0.5·affinity` различает их слабо. Оставили формулу как есть: это честная оценка.
+- Запрос по WKT-полигону (`filter.location=POLYGON((…))`) работает, это основа профиля зоны.
+
+### Другие эндпоинты
+
+- `/v2/tags?filter.query=ramen`: `results.tags[]` с `id`, `name`, `type`, `popularity`. Для конкурентов берём `urn:tag:genre:place:restaurant:ramen` (есть и `urn:tag:category:place:ramen_restaurant`, даёт тех же 20).
+- `urn:demographics`: `results.demographics[]` **по каждому якорю отдельно**, для портрета концепции значения надо усреднять.
+- `urn:tag` + `signal.location=<полигон>` + якоря работает, но теги получаются общие («Bar», «Chicken Wings»).
+
+### Решения по экспериментам
+
+| | Результат | Решение |
+|---|---|---|
+| E1 | Карты рамен-бара и семейного кафе в Остине: Спирмен 0.51, лучшие 5% совпадают на 10% | Карта различает концепции, режим `lift` не нужен |
+| E2 | Местные якоря против якорей из других городов: Спирмен 0.97, вокруг Ramen Tatsu-Ya 0.90 против 0.84 | Карта на якорях не замыкается, местные якоря остаются в сигнале |
+| E3 | Все конкуренты одним-двумя запросами, совпадение через `filter.results.entities` | Как в шаге 5 |
+| E4 | Бруклин и Чикаго — geohash-7 | Адаптивный радиус DBSCAN остаётся страховкой |
+| E5 | 5 в секунду, 10 000 в месяц | Ограничитель 4 в секунду, кэш, лимит по IP |
+| E6 | Не проверяли | Ждёт выбора LLM |
+| E7 | `500 System Error` | Районы — из мест; исключение района — оболочка его мест |
+
+### Что поменялось в модели после живых данных
+
+- **Сглаживание тепловой карты.** Живая карта рябит, а у аэропорта Остина почти 1.0 по всем типам якорей — туда ходят все. Конвейер сглаживает `affinity` по ячейке и восьми соседям (гаусс, σ = размер ячейки, отсутствующие соседи считаются нулём) и снова переводит в процентиль (`smoothCells`). Одиночные всплески вроде аэропорта ушли из зон, районы стали цельными.
+
+### Города
+
+| Город | `localityId` | Якоря сценария |
+|---|---|---|
+| Austin, TX | `C93C0541-F43D-484E-AC86-E27A54E5B1D0` | Ramen Tatsu-Ya, Kitty Cohen's, Khruangbin, Lagunitas Brewing Company |
+| Brooklyn, NY | `86BAEBAE-2980-43B6-9E75-2A5CDB898628` | Ivan Ramen, Khruangbin, Lagunitas, LP Vinyl Bar |
+| Chicago, IL | `27748652-BB63-461D-9C65-207D06E18716` | RAMEN-SAN, Khruangbin, Lagunitas, LP Vinyl Bar |
