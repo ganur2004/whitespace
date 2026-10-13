@@ -331,9 +331,16 @@ export interface TraceStep {
   cachedAt?: string;
 }
 
+export interface AnchorAudience {
+  anchorId: string;
+  age: Record<string, number>;
+  gender: Record<string, number>;
+}
+
 export interface AudiencePortrait {
   age: Record<string, number>;
   gender: Record<string, number>;
+  byAnchor: AnchorAudience[];
 }
 
 export interface ScoutResult {
@@ -454,6 +461,7 @@ export type ChatAction =
 ### Шаг 7а. Портрет аудитории (P1)
 - Один запрос на анализ: `GET /v2/insights?filter.type=urn:demographics&signal.interests.entities=<anchor ids>`.
 - Результат: возраст и пол аудитории концепции относительно среднего (`ScoutResult.audience`). Показывается над карточками зон, и бриф получает заземлённый ответ на «кто аудитория». От зоны не зависит.
+- Сделано. Qloo отдаёт демографию по каждому якорю отдельно, и якоря тянут очень разную аудиторию: в Остине Ramen Tatsu-Ya — 25–29, Lagunitas — 55+. Простое среднее превращается в «аудитория 55+» из-за одного бренда, поэтому интерфейс показывает и общий вывод, и разбивку по якорям (`AudiencePortrait.byAnchor`). Если якоря расходятся по возрасту, фраза так и говорит. Запрос идёт параллельно с тепловой картой и конкурентами; если он не удался, анализ проходит без портрета.
 
 ### Шаг 8. Брифы
 - LLM пишет по каждой зоне короткий бриф (4–6 предложений): почему здесь, кто аудитория, какие конкуренты, на что обратить внимание, что проверить дальше (аренда, трафик, визит на место). Про аудиторию — только из `audience` и `drivers`, если они есть.

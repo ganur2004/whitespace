@@ -16,6 +16,7 @@ import { streamScout } from "./api/scout.js";
 import { polygonsBBox } from "./map/bounds.js";
 import type { LayerMode } from "./map/layers.js";
 import { MapView, type MapFocus } from "./map/MapView.js";
+import { AudiencePanel } from "./panels/AudiencePanel.js";
 import { ConceptPanel, type RunStatus } from "./panels/ConceptPanel.js";
 import { MapControls } from "./panels/MapControls.js";
 import { TracePanel } from "./panels/TracePanel.js";
@@ -236,6 +237,9 @@ export function App(): React.JSX.Element {
               <p className="notice small">
                 Demo data: recorded or synthetic responses, not a live Qloo call.
               </p>
+            )}
+            {result.audience && (
+              <AudiencePanel audience={result.audience} anchorNames={anchorNames} />
             )}
             <MapControls
               variant="sheet"
