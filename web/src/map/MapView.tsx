@@ -25,6 +25,7 @@ import {
   zonesGeoJSON,
   type LayerMode,
 } from "./layers.js";
+import { composeMapImage, type MapCapture } from "./capture.js";
 import { describeCell, describeCompetitor, describeTastePlace, tipElement } from "./tooltip.js";
 
 const STYLE_URL =
@@ -50,6 +51,7 @@ export interface MapViewProps {
   selectedZoneId: string | undefined;
   hoveredZoneId: string | undefined;
   onSelectZone: (zoneId: string) => void;
+  captureRef?: { current: MapCapture | null };
 }
 
 function focusPadding(width: number, height: number) {
@@ -70,19 +72,41 @@ export function MapView({
   selectedZoneId,
   hoveredZoneId,
   onSelectZone,
+  captureRef,
 }: MapViewProps): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const markers = useRef<Marker[]>([]);
   const modeRef = useRef(mode);
   const selectRef = useRef(onSelectZone);
+  const zonesRef = useRef(zones);
   const initialBbox = useRef(focus.bbox);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     modeRef.current = mode;
     selectRef.current = onSelectZone;
+    zonesRef.current = zones;
   });
+
+  useEffect(() => {
+    if (!captureRef) return;
+    captureRef.current = {
+      capture: () =>
+        new Promise((resolve) => {
+          const instance = map.current;
+          if (!instance) {
+            resolve(undefined);
+            return;
+          }
+          instance.once("render", () => resolve(composeMapImage(instance, zonesRef.current)));
+          instance.triggerRepaint();
+        }),
+    };
+    return () => {
+      captureRef.current = null;
+    };
+  }, [captureRef]);
 
   useEffect(() => {
     if (!container.current) return;

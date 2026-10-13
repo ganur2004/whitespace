@@ -13,12 +13,14 @@ import {
   type Zone,
 } from "@whitespace/shared";
 import { streamScout } from "./api/scout.js";
+import { briefFileName, buildBrief, downloadText } from "./brief.js";
+import type { MapCapture } from "./map/capture.js";
 import { polygonsBBox } from "./map/bounds.js";
 import type { LayerMode } from "./map/layers.js";
 import { MapView, type MapFocus } from "./map/MapView.js";
 import { AudiencePanel } from "./panels/AudiencePanel.js";
 import { ConceptPanel, type RunStatus } from "./panels/ConceptPanel.js";
-import { MapControls } from "./panels/MapControls.js";
+import { MapControls, worryLabel } from "./panels/MapControls.js";
 import { TracePanel } from "./panels/TracePanel.js";
 import { ZoneCards } from "./panels/ZoneCards.js";
 import { useZoneProfiles } from "./useZoneProfiles.js";
@@ -69,6 +71,8 @@ export function App(): React.JSX.Element {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [focus, setFocus] = useState<MapFocus>({ key: "start", bbox: DEFAULT_CITY.bbox });
   const running = useRef<AbortController | null>(null);
+  const mapCapture = useRef<MapCapture | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const city = findCity(cityId) ?? DEFAULT_CITY;
   const scenario = scenarioFor(cityId);
@@ -174,6 +178,29 @@ export function App(): React.JSX.Element {
     [zones],
   );
 
+  const downloadBrief = async () => {
+    if (!result) return;
+    setExporting(true);
+    try {
+      const mapImage = await mapCapture.current?.capture();
+      const now = new Date();
+      downloadText(
+        briefFileName(result, now),
+        buildBrief({
+          result,
+          zones,
+          competitionWeight,
+          competitionLabel: worryLabel(competitionWeight),
+          excludedCount: excluded.length,
+          mapImage,
+          now,
+        }),
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const excludeZone = (zone: Zone) => {
     setExcluded((current) => [...current, zone.polygon]);
     setSelectedZoneId(undefined);
@@ -194,6 +221,7 @@ export function App(): React.JSX.Element {
         selectedZoneId={selectedZoneId}
         hoveredZoneId={hoveredZoneId}
         onSelectZone={selectZone}
+        captureRef={mapCapture}
       />
 
       <ConceptPanel
@@ -226,7 +254,17 @@ export function App(): React.JSX.Element {
               {sheetExpanded ? "Show map" : "Show all zones"}
             </button>
             <header className="zones-header">
-              <h2>Top zones in {result.city.name}</h2>
+              <div className="zones-title">
+                <h2>Top zones in {result.city.name}</h2>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void downloadBrief()}
+                  disabled={exporting || status.kind === "running"}
+                >
+                  {exporting ? "Preparing…" : "Download brief"}
+                </button>
+              </div>
               <p className="muted small">
                 {view.zones.length} {view.zones.length === 1 ? "zone" : "zones"} ·{" "}
                 {result.competitors.length} similar venues ·{" "}

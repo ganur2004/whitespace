@@ -592,6 +592,29 @@ textarea {
     0 2px 8px rgba(31, 35, 40, 0.35);
 }
 
+.zones-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.secondary {
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .zones-header {
   display: grid;
   gap: 2px;
