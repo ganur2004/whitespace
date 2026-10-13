@@ -15,6 +15,8 @@ export interface Config {
   trustProxy: boolean;
   scoutBurst: number;
   scoutPerMinute: number;
+  profileBurst: number;
+  profilePerMinute: number;
 }
 
 const positive = (value: string | undefined, fallback: number): number => {
@@ -34,5 +36,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     trustProxy: env.TRUST_PROXY !== "false",
     scoutBurst: positive(env.SCOUT_LIMIT_BURST, 8),
     scoutPerMinute: positive(env.SCOUT_LIMIT_PER_MINUTE, 3),
+    profileBurst: positive(env.PROFILE_LIMIT_BURST, 20),
+    profilePerMinute: positive(env.PROFILE_LIMIT_PER_MINUTE, 10),
   };
 }

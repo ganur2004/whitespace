@@ -9,11 +9,13 @@ import type { Config } from "./config.js";
 import { IpRateLimiter } from "./limits.js";
 import type { QlooClient } from "./qloo/client.js";
 import { createQlooClient } from "./qloo/create.js";
+import { profileRoutes } from "./routes/profile.js";
 import { scoutRoutes } from "./routes/scout.js";
 
 export interface AppDeps {
   qloo?: QlooClient;
   scoutLimiter?: IpRateLimiter;
+  profileLimiter?: IpRateLimiter;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -22,6 +24,8 @@ export function createApp(config: Config, deps: AppDeps = {}): Hono {
   const app = new Hono();
   const qloo = deps.qloo ?? createQlooClient(config);
   const limiter = deps.scoutLimiter ?? new IpRateLimiter(config.scoutBurst, config.scoutPerMinute);
+  const profileLimiter =
+    deps.profileLimiter ?? new IpRateLimiter(config.profileBurst, config.profilePerMinute);
 
   app.use(secureHeaders());
   app.use(
@@ -42,6 +46,7 @@ export function createApp(config: Config, deps: AppDeps = {}): Hono {
   });
 
   app.route("/", scoutRoutes(qloo, { limiter, trustProxy: config.trustProxy }));
+  app.route("/", profileRoutes(qloo, { limiter: profileLimiter, trustProxy: config.trustProxy }));
   app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
   const indexFile = join(config.webDist, "index.html");

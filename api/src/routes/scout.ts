@@ -121,9 +121,8 @@ export function scoutRoutes(qloo: QlooClient, options: ScoutRouteOptions): Hono 
     return streamSSE(c, async (stream) => {
       let pending = Promise.resolve();
       const send = (event: ScoutEvent): void => {
-        pending = pending.then(() =>
-          stream.writeSSE({ event: event.type, data: JSON.stringify(event) }),
-        );
+        const data = JSON.stringify(event);
+        pending = pending.then(() => stream.writeSSE({ event: event.type, data }));
       };
       try {
         finish(await runScout(input, qloo, send));

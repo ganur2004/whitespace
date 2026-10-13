@@ -83,7 +83,7 @@ describe("runScout on synthetic data", () => {
     const result = await runScout({ ...input, categoryTags: [] }, demoClient());
 
     expect(result.competitors).toEqual([]);
-    expect(result.trace).toHaveLength(1);
+    expect(result.trace.filter((step) => step.label.startsWith("Competitor"))).toEqual([]);
   });
 
   it("rejects unknown cities and missing anchors", async () => {

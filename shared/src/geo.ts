@@ -1,3 +1,5 @@
+import { booleanPointInPolygon } from "@turf/turf";
+import type { Polygon } from "geojson";
 import type { BBox, LonLat } from "./types.js";
 
 const EARTH_RADIUS_M = 6_371_008.8;
@@ -23,4 +25,8 @@ export function isValidLonLat([lon, lat]: LonLat): boolean {
   return (
     Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90
   );
+}
+
+export function insidePolygon(point: LonLat, polygon: Polygon): boolean {
+  return booleanPointInPolygon(point, polygon);
 }

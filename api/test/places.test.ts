@@ -16,8 +16,11 @@ describe("parsePlaces", () => {
   it("reads the synthetic places", async () => {
     const { places, skipped } = parsePlaces(await syntheticPlaces());
 
-    expect(places).toHaveLength(30);
     expect(skipped).toBe(0);
+    expect(places.filter((place) => place.tags.includes(RAMEN_RESTAURANT_TAG.id))).toHaveLength(30);
+    expect(places.filter((place) => !place.tags.includes(RAMEN_RESTAURANT_TAG.id))).toHaveLength(
+      20,
+    );
     const first = places[0]!;
     expect(first.tags).toEqual([RAMEN_RESTAURANT_TAG.id]);
     expect(first.neighborhood).toBe("Downtown");

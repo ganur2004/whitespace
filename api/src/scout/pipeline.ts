@@ -18,6 +18,7 @@ import {
 import type { QlooClient, QlooResult } from "../qloo/client.js";
 import type { QlooEndpoint, QlooParams } from "../qloo/params.js";
 import { parseHeatmap, parsePlaces, type ParsedHeatmap } from "../qloo/types.js";
+import { profileZones } from "../profile/profile.js";
 
 export interface ScoutInput {
   concept: string;
@@ -72,7 +73,7 @@ export async function runScout(
   const params: ScoringParams = { ...DEFAULT_SCORING_PARAMS, excludePolygons: [], ...input.params };
   const { cells, zones } = rescore(heatmap.cells, competitors, params, { cityName: city.name });
 
-  const result: ScoutResult = {
+  const base: ScoutResult = {
     concept: input.concept,
     city: heatmap.locality ? { ...city, resolvedLocality: heatmap.locality } : { ...city },
     anchors: input.anchors,
@@ -82,7 +83,25 @@ export async function runScout(
     competitors,
     zones,
     params,
-    trace,
+    trace: [...trace],
+    demo,
+  };
+  emit({ type: "result", result: base });
+
+  const profiles = await profileZones(
+    zones,
+    anchorIds,
+    new Set(input.categoryTags.map((tag) => tag.id)),
+    call,
+    (zone, error) => console.warn(`Zone ${zone.rank ?? zone.id} profile failed`, error),
+  );
+  const result: ScoutResult = {
+    ...base,
+    zones: zones.map((zone) => {
+      const profile = profiles[zone.id];
+      return profile ? { ...zone, profile } : zone;
+    }),
+    trace: [...trace],
     demo,
   };
   emit({ type: "result", result });
