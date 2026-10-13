@@ -19,6 +19,7 @@ export function rescore(
 }
 
 export { scoreCells } from "./opportunity.js";
+export { smoothCells } from "./smooth.js";
 export { buildZones, clusterRadius, NEARBY_RADIUS_M, type ZoneOptions } from "./zones.js";
 export {
   competitorWeight,

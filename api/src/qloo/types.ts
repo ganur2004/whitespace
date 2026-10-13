@@ -11,7 +11,9 @@ import {
 const localitySchema = z.object({
   entity_id: z.string(),
   name: z.string(),
-  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
+  location: z
+    .object({ lat: z.number(), lon: z.number().optional(), lng: z.number().optional() })
+    .nullish(),
 });
 
 const heatmapSchema = z.object({
@@ -33,7 +35,9 @@ const heatmapSchema = z.object({
   }),
   query: z
     .object({
-      localities: z.object({ filter: localitySchema.optional() }).optional(),
+      localities: z
+        .object({ filter: z.union([localitySchema, z.array(localitySchema)]).optional() })
+        .optional(),
     })
     .optional(),
 });
@@ -51,11 +55,16 @@ export function parseHeatmap(data: unknown, expectedCenter: LonLat): ParsedHeatm
     return cell;
   });
 
-  const filter = parsed.query?.localities?.filter;
+  const resolved = parsed.query?.localities?.filter;
+  const filter = Array.isArray(resolved) ? resolved[0] : resolved;
   if (!filter) return { cells };
 
   const locality: ResolvedLocality = { id: filter.entity_id, name: filter.name };
-  const center = filter.location && localityCenter(filter.location, expectedCenter);
+  const longitude = filter.location?.lon ?? filter.location?.lng;
+  const center =
+    filter.location && longitude !== undefined
+      ? localityCenter({ lat: filter.location.lat, lng: longitude }, expectedCenter)
+      : undefined;
   if (center) locality.center = center;
   return { cells, locality };
 }
@@ -76,23 +85,47 @@ export function localityCenter(
   return best;
 }
 
+const KEPT_TAG_TYPES = new Set([
+  "urn:tag:genre:place",
+  "urn:tag:category:place",
+  "urn:tag:cuisine:qloo",
+  "urn:tag:culinary_style:qloo",
+  "urn:tag:ambience:qloo",
+  "urn:tag:ambience:place",
+  "urn:tag:setting:qloo",
+  "urn:tag:customer_identity:qloo",
+  "urn:tag:interests:qloo",
+  "urn:tag:beverage_offering:qloo",
+  "urn:tag:time_of_day_fit:qloo",
+  "urn:tag:neighborhood_characteristic:qloo",
+]);
+
 const placeSchema = z.object({
   entity_id: z.string().min(1),
   name: z.string(),
-  location: z.object({ lat: z.number(), lon: z.number() }).optional(),
+  location: z.object({ lat: z.number(), lon: z.number() }).nullish(),
   properties: z
     .object({
-      neighborhood: z.string().optional(),
-      price_level: z.number().optional(),
+      neighborhood: z.string().nullish(),
+      price_level: z.number().nullish(),
+      geocode: z.object({ name: z.string().nullish(), city: z.string().nullish() }).nullish(),
     })
-    .optional(),
-  tags: z.array(z.object({ id: z.string().optional(), tag_id: z.string().optional() })).optional(),
+    .nullish(),
+  tags: z
+    .array(
+      z.object({
+        id: z.string().nullish(),
+        tag_id: z.string().nullish(),
+        type: z.string().nullish(),
+      }),
+    )
+    .nullish(),
   query: z
     .object({
-      affinity: z.number().optional(),
+      affinity: z.number().nullish(),
       explainability: z.unknown().optional(),
     })
-    .optional(),
+    .nullish(),
 });
 
 const placesResponseSchema = z.object({
@@ -123,18 +156,27 @@ export function parsePlaces(data: unknown): ParsedPlaces {
       name: entity.name,
       lat: location.lat,
       lon: location.lon,
-      tags: (entity.tags ?? []).flatMap((tag) => tag.id ?? tag.tag_id ?? []),
+      tags: (entity.tags ?? []).flatMap((tag) =>
+        !tag.type || KEPT_TAG_TYPES.has(tag.type) ? (tag.id ?? tag.tag_id ?? []) : [],
+      ),
     };
-    if (entity.properties?.neighborhood) place.neighborhood = entity.properties.neighborhood;
-    if (entity.properties?.price_level !== undefined) {
-      place.priceLevel = entity.properties.price_level;
-    }
-    if (entity.query?.affinity !== undefined) place.affinity = clamp01(entity.query.affinity);
+    const neighborhood = neighborhoodOf(entity.properties);
+    if (neighborhood) place.neighborhood = neighborhood;
+    const priceLevel = entity.properties?.price_level;
+    if (typeof priceLevel === "number") place.priceLevel = priceLevel;
+    const affinity = entity.query?.affinity;
+    if (typeof affinity === "number") place.affinity = clamp01(affinity);
     const drivers = parseDrivers(entity.query?.explainability);
     if (drivers.length > 0) place.drivers = drivers;
     places.push(place);
   }
   return { places, skipped };
+}
+
+function neighborhoodOf(properties: z.infer<typeof placeSchema>["properties"]): string | undefined {
+  if (properties?.neighborhood) return properties.neighborhood;
+  const area = properties?.geocode?.name;
+  return area && area !== properties?.geocode?.city ? area : undefined;
 }
 
 function parseDrivers(value: unknown): { anchorId: string; score: number }[] {

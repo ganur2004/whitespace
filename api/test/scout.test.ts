@@ -1,12 +1,18 @@
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { SCENARIOS, type ScoutEvent, type ScoutResult } from "@whitespace/shared";
+import { SCENARIOS, findCity, type ScoutEvent, type ScoutResult } from "@whitespace/shared";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { SyntheticFixtures } from "../src/demo/fixtures.js";
 import { QlooClient } from "../src/qloo/client.js";
 import { Limiter } from "../src/qloo/limiter.js";
-import { bboxPolygon, runScout, ScoutInputError, type ScoutInput } from "../src/scout/pipeline.js";
+import {
+  bboxPolygon,
+  loadHeatmap,
+  runScout,
+  ScoutInputError,
+  type ScoutInput,
+} from "../src/scout/pipeline.js";
 
 const FIXTURES_DIR = resolve(import.meta.dirname, "../fixtures");
 const scenario = SCENARIOS[0]!;
@@ -30,7 +36,17 @@ const demoClient = () =>
 const json = (body: unknown): Response =>
   new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 
-const heatmapAt = (lat: number, lng: number) => ({
+const liveClient = (fetchMock: typeof fetch) =>
+  new QlooClient({
+    baseUrl: "https://hackathon.api.qloo.com",
+    apiKey: "key",
+    demo: false,
+    fetch: fetchMock,
+    limiter: new Limiter({ maxConcurrent: 5, ratePerSecond: 1000 }),
+    logger: { warn: vi.fn() },
+  });
+
+const heatmapAt = (lat: number, lon: number) => ({
   results: {
     heatmap: [
       {
@@ -40,7 +56,7 @@ const heatmapAt = (lat: number, lng: number) => ({
     ],
   },
   query: {
-    localities: { filter: { entity_id: "loc", name: "Somewhere", location: { lat, lng } } },
+    localities: { filter: [{ entity_id: "loc", name: "Somewhere", location: { lat, lon } }] },
   },
 });
 
@@ -77,30 +93,40 @@ describe("runScout on synthetic data", () => {
     await expect(runScout({ ...input, anchors: [] }, demoClient())).rejects.toThrow(/anchor/);
   });
 
-  it("retries the heatmap by coordinates when Qloo resolves the wrong city", async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(json(heatmapAt(-73.94, 40.66)))
-      .mockResolvedValueOnce(json(heatmapAt(-97.74, 30.27)));
-    const live = new QlooClient({
-      baseUrl: "https://hackathon.api.qloo.com",
-      apiKey: "key",
-      demo: false,
-      fetch: fetchMock,
-      limiter: new Limiter({ maxConcurrent: 5, ratePerSecond: 1000 }),
-      logger: { warn: vi.fn() },
-    });
+  it("asks for the heatmap by locality id when the city has one", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json(heatmapAt(30.27, -97.74)));
+    const live = liveClient(fetchMock);
 
     const result = await runScout({ ...input, categoryTags: [] }, live);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0]![0]);
+    expect(url).toContain("filter.location=C93C0541-F43D-484E-AC86-E27A54E5B1D0");
+    expect(url).not.toContain("filter.location.query");
+    expect(result.trace.map((step) => step.label)).toEqual(["Taste heatmap"]);
+  });
+
+  it("retries by coordinates when a city without a locality id resolves to the wrong place", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json(heatmapAt(40.66, -73.94)))
+      .mockResolvedValueOnce(json(heatmapAt(30.27, -97.74)));
+    const live = liveClient(fetchMock);
+    const { id, name, center, bbox } = findCity("austin")!;
+    const austin = { id, name, center, bbox };
+    const labels: string[] = [];
+
+    const heatmap = await loadHeatmap(austin, "a,b", async (endpoint, params, label) => {
+      labels.push(label);
+      return live.get(endpoint, params, label);
+    });
+
+    expect(heatmap.cells).toHaveLength(1);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("filter.location.query=Austin");
     const retryUrl = String(fetchMock.mock.calls[1]![0]);
     expect(retryUrl).toContain("filter.location=POINT(-97.7431%2030.2672)");
     expect(retryUrl).toContain("filter.location.radius=25000");
-    expect(result.trace.map((step) => step.label)).toEqual([
-      "Taste heatmap",
-      "Taste heatmap by coordinates",
-    ]);
+    expect(labels).toEqual(["Taste heatmap", "Taste heatmap by coordinates"]);
   });
 
   it("writes the city bounding box as a closed WKT polygon", () => {

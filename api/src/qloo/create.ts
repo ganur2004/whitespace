@@ -11,6 +11,6 @@ export function createQlooClient(config: Config): QlooClient {
     demo: config.demoMode,
     store: new FileStore(config.cacheDir),
     demoSource: new SyntheticFixtures(config.fixturesDir),
-    limiter: new Limiter({ maxConcurrent: 5, ratePerSecond: 10 }),
+    limiter: new Limiter({ maxConcurrent: 4, ratePerSecond: 4 }),
   });
 }

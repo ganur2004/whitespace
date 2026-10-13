@@ -79,7 +79,7 @@ export class QlooClient {
       this.now,
     );
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
-    this.limiter = options.limiter ?? new Limiter({ maxConcurrent: 5, ratePerSecond: 10 });
+    this.limiter = options.limiter ?? new Limiter({ maxConcurrent: 4, ratePerSecond: 4 });
     this.sleep = options.sleep ?? sleep;
     this.logger = options.logger ?? console;
     this.storeFreshMs = options.storeFreshMs ?? 7 * 24 * HOUR_MS;

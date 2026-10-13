@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import ngeohash from "ngeohash";
 import {
-  SYNTHETIC_ANCHORS,
-  SYNTHETIC_RAMEN_TAG,
+  RAMEN_RESTAURANT_TAG,
+  SCENARIOS,
   distanceMeters,
   findCity,
   type LonLat,
@@ -121,14 +121,16 @@ function buildHeatmap(center: LonLat) {
     },
     query: {
       localities: {
-        filter: {
-          entity_id: SYNTHETIC_LOCALITY_ID,
-          name: "Austin (synthetic)",
-          subtype: "urn:entity:locality",
-          location: { lat: center[0], lng: center[1] },
-          popularity: 1,
-          disambiguation: "Synthetic locality for tests and demo mode",
-        },
+        filter: [
+          {
+            entity_id: SYNTHETIC_LOCALITY_ID,
+            name: "Austin (synthetic)",
+            subtype: "urn:entity:locality",
+            location: { lat: center[1], lon: center[0] },
+            popularity: 1,
+            disambiguation: "Synthetic locality for tests and demo mode",
+          },
+        ],
       },
     },
     duration: 0,
@@ -155,6 +157,7 @@ const PLACE_GROUPS: PlaceGroup[] = [
 
 function buildPlaces(center: LonLat) {
   const random = mulberry32(SEED + 1);
+  const anchors = SCENARIOS[0]?.anchors ?? [];
   const gaussian = (): number => {
     const u = Math.max(random(), 1e-9);
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
@@ -177,14 +180,26 @@ function buildPlaces(center: LonLat) {
         subtype: "urn:entity:place",
         location: { lat: round(lat), lon: round(lon), geohash: ngeohash.encode(lat, lon, 12) },
         properties: {
-          neighborhood: group.name,
+          neighborhood: serial % 3 === 0 ? null : group.name,
           price_level: 1 + Math.floor(random() * 3),
+          geocode: { name: serial % 3 === 0 ? group.name : null, city: "Austin" },
         },
-        tags: [{ id: SYNTHETIC_RAMEN_TAG.id, name: SYNTHETIC_RAMEN_TAG.name }],
+        tags: [
+          {
+            id: RAMEN_RESTAURANT_TAG.id,
+            name: RAMEN_RESTAURANT_TAG.name,
+            type: "urn:tag:genre:place",
+          },
+          {
+            id: "urn:tag:offerings:place:hot_tea",
+            name: "Hot tea",
+            type: "urn:tag:offerings:place",
+          },
+        ],
         query: {
           affinity: round(affinity),
           explainability: {
-            "signal.interests.entities": SYNTHETIC_ANCHORS.map((anchor) => ({
+            "signal.interests.entities": anchors.map((anchor) => ({
               entity_id: anchor.id,
               score: round(random() * affinity),
             })),

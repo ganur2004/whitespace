@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SYNTHETIC_ANCHORS, SYNTHETIC_RAMEN_TAG } from "@whitespace/shared";
+import { RAMEN_RESTAURANT_TAG, SCENARIOS } from "@whitespace/shared";
 import { parsePlaces } from "../src/qloo/types.js";
 
 async function syntheticPlaces(): Promise<unknown> {
@@ -19,11 +19,11 @@ describe("parsePlaces", () => {
     expect(places).toHaveLength(30);
     expect(skipped).toBe(0);
     const first = places[0]!;
-    expect(first.tags).toEqual([SYNTHETIC_RAMEN_TAG.id]);
+    expect(first.tags).toEqual([RAMEN_RESTAURANT_TAG.id]);
     expect(first.neighborhood).toBe("Downtown");
     expect(first.affinity).toBeGreaterThan(0);
     expect(first.drivers?.map((driver) => driver.anchorId).sort()).toEqual(
-      SYNTHETIC_ANCHORS.map((anchor) => anchor.id).sort(),
+      SCENARIOS[0]!.anchors.map((anchor) => anchor.id).sort(),
     );
     expect(first.drivers![0]!.score).toBeGreaterThanOrEqual(first.drivers![1]!.score);
   });

@@ -5,6 +5,7 @@ import {
   findCity,
   inBBox,
   rescore,
+  smoothCells,
   type Anchor,
   type BBox,
   type PlaceRef,
@@ -36,7 +37,11 @@ const PAGE_SIZE = 50;
 const MAX_PAGES = 4;
 const AFFINITY_BATCH = 50;
 
-type Call = (endpoint: QlooEndpoint, params: QlooParams, label: string) => Promise<QlooResult>;
+export type Call = (
+  endpoint: QlooEndpoint,
+  params: QlooParams,
+  label: string,
+) => Promise<QlooResult>;
 
 export async function runScout(
   input: ScoutInput,
@@ -84,7 +89,7 @@ export async function runScout(
   return result;
 }
 
-async function loadHeatmap(city: SupportedCity, anchorIds: string, call: Call) {
+export async function loadHeatmap(city: SupportedCity, anchorIds: string, call: Call) {
   const signal = { "filter.type": "urn:heatmap", "signal.interests.entities": anchorIds };
   if (city.localityId) {
     const response = await call(
@@ -120,10 +125,8 @@ async function loadHeatmap(city: SupportedCity, anchorIds: string, call: Call) {
 }
 
 function withinCity(heatmap: ParsedHeatmap, bbox: BBox): ParsedHeatmap {
-  return {
-    ...heatmap,
-    cells: heatmap.cells.filter((cell) => inBBox(cellCenter(cell.geohash), bbox)),
-  };
+  const inside = heatmap.cells.filter((cell) => inBBox(cellCenter(cell.geohash), bbox));
+  return { ...heatmap, cells: smoothCells(inside) };
 }
 
 async function loadCompetitors(

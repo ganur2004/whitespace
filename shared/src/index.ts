@@ -10,10 +10,4 @@ export {
   localProjector,
 } from "./geohash.js";
 export * from "./scoring/index.js";
-export {
-  SCENARIOS,
-  SYNTHETIC_ANCHORS,
-  SYNTHETIC_RAMEN_TAG,
-  scenarioFor,
-  type Scenario,
-} from "./scenarios.js";
+export { RAMEN_RESTAURANT_TAG, SCENARIOS, scenarioFor, type Scenario } from "./scenarios.js";
