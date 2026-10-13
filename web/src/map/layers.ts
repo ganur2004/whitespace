@@ -14,6 +14,7 @@ export const SOURCES = {
   competitors: "competitors",
   zones: "zones",
   excluded: "excluded",
+  tastePlaces: "taste-places",
 } as const;
 export const LAYERS = {
   cells: "cells-fill",
@@ -22,6 +23,7 @@ export const LAYERS = {
   zonesFill: "zones-fill",
   zonesLine: "zones-line",
   competitors: "competitors-circle",
+  tastePlaces: "taste-places-circle",
 } as const;
 
 export const AUDIENCE_RAMP: [number, string][] = [
@@ -42,6 +44,7 @@ export const OPPORTUNITY_RAMP: [number, string][] = [
 
 const INK = "#1f2328";
 const MUTED = "#5f6670";
+const ACCENT = "#e4572e";
 const HATCH = "hatch";
 const HATCH_SIZE = 8;
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -128,6 +131,28 @@ export function zonesGeoJSON(
   };
 }
 
+export function tastePlacesGeoJSON(
+  places: readonly PlaceRef[],
+  anchorNames: Readonly<Record<string, string>>,
+): FeatureCollection<Point> {
+  return {
+    type: "FeatureCollection",
+    features: places.map((place): Feature<Point> => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [place.lon, place.lat] },
+      properties: {
+        name: place.name,
+        neighborhood: place.neighborhood ?? null,
+        affinity: place.affinity ?? null,
+        via: (place.drivers ?? [])
+          .slice(0, 2)
+          .flatMap((driver) => anchorNames[driver.anchorId] ?? [])
+          .join(" and "),
+      },
+    })),
+  };
+}
+
 export function excludedGeoJSON(polygons: readonly Polygon[]): FeatureCollection<Polygon> {
   return {
     type: "FeatureCollection",
@@ -198,6 +223,17 @@ export function installLayers(map: MapLibreMap): void {
     paint: {
       "line-color": INK,
       "line-width": ["case", ["boolean", ["get", "highlighted"], false], 4, 2.5],
+    },
+  });
+  map.addLayer({
+    id: LAYERS.tastePlaces,
+    type: "circle",
+    source: SOURCES.tastePlaces,
+    paint: {
+      "circle-radius": 6,
+      "circle-color": "#ffffff",
+      "circle-stroke-color": ACCENT,
+      "circle-stroke-width": 3,
     },
   });
   map.addLayer({

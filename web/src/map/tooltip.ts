@@ -70,3 +70,19 @@ export function describeCompetitor(properties: Record<string, unknown>): TipLine
   });
   return lines;
 }
+
+export function describeTastePlace(properties: Record<string, unknown>): TipLine[] {
+  const lines: TipLine[] = [{ text: String(properties.name ?? "Place"), strong: true }];
+  if (typeof properties.neighborhood === "string") lines.push({ text: properties.neighborhood });
+  const affinity = asNumber(properties.affinity);
+  lines.push({
+    text:
+      affinity === undefined
+        ? "Locals with your taste love it"
+        : `Locals with your taste love it: ${Math.round(affinity * 100)}% match`,
+  });
+  if (typeof properties.via === "string" && properties.via) {
+    lines.push({ text: `Matched via ${properties.via}` });
+  }
+  return lines;
+}

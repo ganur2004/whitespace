@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
-import type { Zone } from "@whitespace/shared";
+import type { PlaceRef, Zone } from "@whitespace/shared";
 
 export interface ZoneCardsProps {
   zones: readonly Zone[];
+  anchorNames: Readonly<Record<string, string>>;
+  profilesLoading: ReadonlySet<string>;
   selectedZoneId: string | undefined;
   excludedCount: number;
   onSelect: (zoneId: string) => void;
@@ -11,8 +13,29 @@ export interface ZoneCardsProps {
   onResetExclusions: () => void;
 }
 
+const topDrivers = (place: PlaceRef): string[] =>
+  (place.drivers ?? []).slice(0, 2).map((driver) => driver.anchorId);
+
+export function dominantDrivers(places: readonly PlaceRef[]): string[] {
+  const totals = new Map<string, number>();
+  for (const place of places) {
+    for (const driver of place.drivers ?? []) {
+      totals.set(driver.anchorId, (totals.get(driver.anchorId) ?? 0) + driver.score);
+    }
+  }
+  return [...totals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([anchorId]) => anchorId);
+}
+
+const names = (ids: readonly string[], anchorNames: Readonly<Record<string, string>>): string =>
+  ids.flatMap((id) => anchorNames[id] ?? []).join(" and ");
+
 export function ZoneCards({
   zones,
+  anchorNames,
+  profilesLoading,
   selectedZoneId,
   excludedCount,
   onSelect,
@@ -79,6 +102,12 @@ export function ZoneCards({
               <li key={reason}>{reason}</li>
             ))}
           </ul>
+          {zone.profile && zone.profile.tastePlaces.length > 0 && (
+            <TastePlaces places={zone.profile.tastePlaces} anchorNames={anchorNames} />
+          )}
+          {!zone.profile && profilesLoading.has(zone.id) && (
+            <p className="muted small">Finding what locals here love…</p>
+          )}
           <div className="zone-actions">
             <button type="button" className="link-button" onClick={() => onSelect(zone.id)}>
               Show on map
@@ -89,6 +118,37 @@ export function ZoneCards({
           </div>
         </article>
       ))}
+    </div>
+  );
+}
+
+function TastePlaces({
+  places,
+  anchorNames,
+}: {
+  places: readonly PlaceRef[];
+  anchorNames: Readonly<Record<string, string>>;
+}): React.JSX.Element {
+  const dominant = dominantDrivers(places);
+  const shown = places.slice(0, 3);
+  return (
+    <div className="taste-places">
+      <span className="field-label">Locals here also love</span>
+      <ul>
+        {shown.map((place) => {
+          const own = topDrivers(place);
+          const differs = own.length > 0 && own.some((id) => !dominant.includes(id));
+          return (
+            <li key={place.id}>
+              <span className="taste-name">{place.name}</span>
+              {differs && <span className="muted"> via {names(own, anchorNames)}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      {dominant.length > 0 && (
+        <span className="muted small">The match here leans on {names(dominant, anchorNames)}.</span>
+      )}
     </div>
   );
 }

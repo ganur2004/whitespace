@@ -19,12 +19,13 @@ import {
   competitorsGeoJSON,
   excludedGeoJSON,
   installLayers,
+  tastePlacesGeoJSON,
   setLayerMode,
   setSourceData,
   zonesGeoJSON,
   type LayerMode,
 } from "./layers.js";
-import { describeCell, describeCompetitor, tipElement } from "./tooltip.js";
+import { describeCell, describeCompetitor, describeTastePlace, tipElement } from "./tooltip.js";
 
 const STYLE_URL =
   (import.meta.env.VITE_MAP_STYLE_URL as string | undefined) ||
@@ -42,6 +43,8 @@ export interface MapViewProps {
   cells: readonly ScoredCell[];
   competitors: readonly PlaceRef[];
   zones: readonly Zone[];
+  tastePlaces: readonly PlaceRef[];
+  anchorNames: Readonly<Record<string, string>>;
   excluded: readonly Polygon[];
   mode: LayerMode;
   selectedZoneId: string | undefined;
@@ -60,6 +63,8 @@ export function MapView({
   cells,
   competitors,
   zones,
+  tastePlaces,
+  anchorNames,
   excluded,
   mode,
   selectedZoneId,
@@ -98,20 +103,22 @@ export function MapView({
 
     const showTip = (event: MapMouseEvent): boolean => {
       const [hit] = instance.queryRenderedFeatures(event.point, {
-        layers: [LAYERS.competitors, LAYERS.cells],
+        layers: [LAYERS.competitors, LAYERS.tastePlaces, LAYERS.cells],
       });
       const lines =
         hit?.layer.id === LAYERS.competitors
           ? describeCompetitor(hit.properties)
-          : hit
-            ? describeCell(hit.properties, modeRef.current)
-            : undefined;
+          : hit?.layer.id === LAYERS.tastePlaces
+            ? describeTastePlace(hit.properties)
+            : hit
+              ? describeCell(hit.properties, modeRef.current)
+              : undefined;
       if (!lines) {
         tip.remove();
         return false;
       }
       tip.setLngLat(event.lngLat).setDOMContent(tipElement(lines)).addTo(instance);
-      return hit?.layer.id === LAYERS.competitors;
+      return hit?.layer.id === LAYERS.competitors || hit?.layer.id === LAYERS.tastePlaces;
     };
 
     const zoneAt = (event: MapMouseEvent): string | undefined => {
@@ -168,6 +175,12 @@ export function MapView({
       setSourceData(map.current, SOURCES.excluded, excludedGeoJSON(excluded));
     }
   }, [ready, excluded]);
+
+  useEffect(() => {
+    if (ready && map.current) {
+      setSourceData(map.current, SOURCES.tastePlaces, tastePlacesGeoJSON(tastePlaces, anchorNames));
+    }
+  }, [ready, tastePlaces, anchorNames]);
 
   useEffect(() => {
     const instance = map.current;

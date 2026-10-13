@@ -84,6 +84,10 @@ export function MapControls({
           Top zone
         </div>
         <div className="legend-item">
+          <span className="legend-taste" aria-hidden="true" />
+          Place locals with your taste love
+        </div>
+        <div className="legend-item">
           <span className="legend-excluded" aria-hidden="true" />
           Excluded area
         </div>

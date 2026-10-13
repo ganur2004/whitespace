@@ -20,6 +20,7 @@ import { ConceptPanel, type RunStatus } from "./panels/ConceptPanel.js";
 import { MapControls } from "./panels/MapControls.js";
 import { TracePanel } from "./panels/TracePanel.js";
 import { ZoneCards } from "./panels/ZoneCards.js";
+import { useZoneProfiles } from "./useZoneProfiles.js";
 
 type ApiState = { kind: "loading" } | { kind: "ready"; health: HealthStatus } | { kind: "down" };
 
@@ -84,6 +85,25 @@ export function App(): React.JSX.Element {
     [result, competitionWeight, excluded],
   );
 
+  const { profiles, loading: profilesLoading } = useZoneProfiles(
+    result,
+    view?.zones,
+    status.kind === "done",
+  );
+  const zones = useMemo(
+    () =>
+      (view?.zones ?? []).map((zone) => {
+        const profile = profiles[zone.id];
+        return profile ? { ...zone, profile } : zone;
+      }),
+    [view, profiles],
+  );
+  const anchorNames = useMemo(
+    () => Object.fromEntries((result?.anchors ?? []).map((anchor) => [anchor.id, anchor.name])),
+    [result],
+  );
+  const highlightedZone = zones.find((zone) => zone.id === (hoveredZoneId ?? selectedZoneId));
+
   const changeCity = (nextId: string) => {
     const next = findCity(nextId);
     if (!next) return;
@@ -110,21 +130,28 @@ export function App(): React.JSX.Element {
     setSelectedZoneId(undefined);
     setSheetExpanded(false);
     const started = performance.now();
+    let focused = false;
     try {
       const next = await streamScout(
         { concept, cityId, anchors: scenario.anchors, categoryTags: scenario.categoryTags },
         (event) => {
           if (event.type === "step") setLiveSteps((steps) => [...steps, event.step]);
+          if (event.type !== "result") return;
+          setResult(event.result);
+          if (focused) return;
+          focused = true;
+          setConceptCollapsed(true);
+          setFocus({
+            key: `result-${Date.now()}`,
+            bbox:
+              polygonsBBox(event.result.zones.map((zone) => zone.polygon)) ??
+              event.result.city.bbox,
+          });
         },
         controller.signal,
       );
       setResult(next);
       setStatus({ kind: "done", ms: performance.now() - started });
-      setConceptCollapsed(true);
-      setFocus({
-        key: `result-${Date.now()}`,
-        bbox: polygonsBBox(next.zones.map((zone) => zone.polygon)) ?? next.city.bbox,
-      });
     } catch (error) {
       if (controller.signal.aborted) return;
       setStatus({
@@ -136,14 +163,14 @@ export function App(): React.JSX.Element {
 
   const selectZone = useCallback(
     (zoneId: string) => {
-      const zone = view?.zones.find((candidate) => candidate.id === zoneId);
+      const zone = zones.find((candidate) => candidate.id === zoneId);
       if (!zone) return;
       setSelectedZoneId(zoneId);
       setSheetExpanded(false);
       const bbox = polygonsBBox([zone.polygon]);
       if (bbox) setFocus({ key: `zone-${zoneId}-${Date.now()}`, bbox });
     },
-    [view],
+    [zones],
   );
 
   const excludeZone = (zone: Zone) => {
@@ -158,7 +185,9 @@ export function App(): React.JSX.Element {
         focus={focus}
         cells={view?.cells ?? []}
         competitors={result?.competitors ?? []}
-        zones={view?.zones ?? []}
+        zones={zones}
+        tastePlaces={highlightedZone?.profile?.tastePlaces ?? []}
+        anchorNames={anchorNames}
         excluded={excluded}
         mode={mode}
         selectedZoneId={selectedZoneId}
@@ -222,7 +251,9 @@ export function App(): React.JSX.Element {
               </p>
             ) : (
               <ZoneCards
-                zones={view.zones}
+                zones={zones}
+                anchorNames={anchorNames}
+                profilesLoading={profilesLoading}
                 selectedZoneId={selectedZoneId}
                 excludedCount={excluded.length}
                 onSelect={selectZone}
