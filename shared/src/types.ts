@@ -81,9 +81,16 @@ export interface TraceStep {
   cachedAt?: string;
 }
 
+export interface AnchorAudience {
+  anchorId: string;
+  age: Record<string, number>;
+  gender: Record<string, number>;
+}
+
 export interface AudiencePortrait {
   age: Record<string, number>;
   gender: Record<string, number>;
+  byAnchor: AnchorAudience[];
 }
 
 export interface ResolvedLocality {

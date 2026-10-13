@@ -290,7 +290,7 @@ describe("QlooClient demo mode", () => {
     const demo = setup({ demo: true, demoSource: new SyntheticFixtures(FIXTURES_DIR) });
 
     await expect(
-      demo.client.get("/v2/insights", { "filter.type": "urn:demographics" }, "Audience"),
+      demo.client.get("/v2/insights", { "filter.type": "urn:entity:brand" }, "Brands"),
     ).rejects.toThrow(/No demo data/);
     expect(demo.fetchMock).not.toHaveBeenCalled();
   });

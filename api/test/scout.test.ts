@@ -71,6 +71,10 @@ describe("runScout on synthetic data", () => {
     expect(result.competitors.every((place) => place.affinity !== undefined)).toBe(true);
     expect(result.zones).toHaveLength(3);
     expect(result.city.resolvedLocality?.name).toBe("Austin (synthetic)");
+    expect(result.audience?.byAnchor.map((entry) => entry.anchorId)).toEqual(
+      scenario.anchors.map((anchor) => anchor.id),
+    );
+    expect(Object.keys(result.audience?.age ?? {})).toHaveLength(6);
     expect(result.trace.map((step) => step.label)).toEqual(
       expect.arrayContaining(["Taste heatmap", "Competitors, page 1", "Competitor taste match"]),
     );
@@ -94,16 +98,23 @@ describe("runScout on synthetic data", () => {
   });
 
   it("asks for the heatmap by locality id when the city has one", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json(heatmapAt(30.27, -97.74)));
+    const fetchMock = vi.fn<typeof fetch>(async (url) =>
+      String(url).includes("urn%3Aheatmap")
+        ? json(heatmapAt(30.27, -97.74))
+        : json({ results: { entities: [], demographics: [] } }),
+    );
     const live = liveClient(fetchMock);
 
     const result = await runScout({ ...input, categoryTags: [] }, live);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const url = String(fetchMock.mock.calls[0]![0]);
-    expect(url).toContain("filter.location=C93C0541-F43D-484E-AC86-E27A54E5B1D0");
-    expect(url).not.toContain("filter.location.query");
-    expect(result.trace.map((step) => step.label)).toEqual(["Taste heatmap"]);
+    const heatmapCalls = fetchMock.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes("urn%3Aheatmap"));
+    expect(heatmapCalls).toHaveLength(1);
+    expect(heatmapCalls[0]).toContain("filter.location=C93C0541-F43D-484E-AC86-E27A54E5B1D0");
+    expect(heatmapCalls[0]).not.toContain("filter.location.query");
+    expect(result.trace.map((step) => step.label)).toContain("Taste heatmap");
+    expect(result.trace.map((step) => step.label)).toContain("Audience portrait");
   });
 
   it("retries by coordinates when a city without a locality id resolves to the wrong place", async () => {

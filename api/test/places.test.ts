@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { RAMEN_RESTAURANT_TAG, SCENARIOS } from "@whitespace/shared";
-import { parsePlaces } from "../src/qloo/types.js";
+import { parseDemographics, parsePlaces } from "../src/qloo/types.js";
 
 async function syntheticPlaces(): Promise<unknown> {
   const file = JSON.parse(
@@ -54,5 +54,26 @@ describe("parsePlaces", () => {
 
   it("rejects a response without an entity list", () => {
     expect(() => parsePlaces({ results: { heatmap: [] } })).toThrow();
+  });
+});
+
+describe("parseDemographics", () => {
+  it("reads one entry per anchor and drops missing values", () => {
+    expect(
+      parseDemographics({
+        results: {
+          demographics: [
+            {
+              entity_id: "a",
+              query: { age: { "25_to_29": 0.4, "55_and_older": null }, gender: { male: -0.2 } },
+            },
+          ],
+        },
+      }),
+    ).toEqual([{ anchorId: "a", age: { "25_to_29": 0.4 }, gender: { male: -0.2 } }]);
+  });
+
+  it("rejects a response without demographics", () => {
+    expect(() => parseDemographics({ results: { entities: [] } })).toThrow();
   });
 });

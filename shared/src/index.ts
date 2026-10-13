@@ -1,4 +1,12 @@
 export type * from "./types.js";
+export {
+  AGE_BANDS,
+  averageAudience,
+  describeAnchorAudience,
+  describeAudience,
+  genderLean,
+  peakAge,
+} from "./audience.js";
 export { CITIES, DEFAULT_CITY, DEFAULT_CITY_ID, findCity } from "./cities.js";
 export { distanceMeters, inBBox, insidePolygon, isValidLonLat } from "./geo.js";
 export {

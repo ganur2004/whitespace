@@ -1,5 +1,6 @@
 import {
   DEFAULT_SCORING_PARAMS,
+  averageAudience,
   cellCenter,
   distanceMeters,
   findCity,
@@ -7,6 +8,7 @@ import {
   rescore,
   smoothCells,
   type Anchor,
+  type AudiencePortrait,
   type BBox,
   type PlaceRef,
   type ScoringParams,
@@ -17,7 +19,7 @@ import {
 } from "@whitespace/shared";
 import type { QlooClient, QlooResult } from "../qloo/client.js";
 import type { QlooEndpoint, QlooParams } from "../qloo/params.js";
-import { parseHeatmap, parsePlaces, type ParsedHeatmap } from "../qloo/types.js";
+import { parseDemographics, parseHeatmap, parsePlaces, type ParsedHeatmap } from "../qloo/types.js";
 import { profileZones } from "../profile/profile.js";
 
 export interface ScoutInput {
@@ -65,9 +67,10 @@ export async function runScout(
 
   emit({ type: "anchors", anchors: input.anchors });
   const anchorIds = input.anchors.map((anchor) => anchor.id).join(",");
-  const [heatmap, competitors] = await Promise.all([
+  const [heatmap, competitors, audience] = await Promise.all([
     loadHeatmap(city, anchorIds, call),
     loadCompetitors(city, input.categoryTags, anchorIds, call),
+    loadAudience(anchorIds, call),
   ]);
 
   const params: ScoringParams = { ...DEFAULT_SCORING_PARAMS, excludePolygons: [], ...input.params };
@@ -86,6 +89,7 @@ export async function runScout(
     trace: [...trace],
     demo,
   };
+  if (audience) base.audience = audience;
   emit({ type: "result", result: base });
 
   const profiles = await profileZones(
@@ -106,6 +110,20 @@ export async function runScout(
   };
   emit({ type: "result", result });
   return result;
+}
+
+async function loadAudience(anchorIds: string, call: Call): Promise<AudiencePortrait | undefined> {
+  try {
+    const response = await call(
+      "/v2/insights",
+      { "filter.type": "urn:demographics", "signal.interests.entities": anchorIds },
+      "Audience portrait",
+    );
+    return averageAudience(parseDemographics(response.data));
+  } catch (error) {
+    console.warn("Audience portrait failed", error);
+    return undefined;
+  }
 }
 
 export async function loadHeatmap(city: SupportedCity, anchorIds: string, call: Call) {

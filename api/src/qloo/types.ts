@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   distanceMeters,
   isValidLonLat,
+  type AnchorAudience,
   type HeatCell,
   type LonLat,
   type PlaceRef,
@@ -195,4 +196,33 @@ function parseDrivers(value: unknown): { anchorId: string; score: number }[] {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+const demographicsSchema = z.object({
+  results: z.object({
+    demographics: z.array(
+      z.object({
+        entity_id: z.string(),
+        query: z.object({
+          age: z.record(z.string(), z.number().nullable()).default({}),
+          gender: z.record(z.string(), z.number().nullable()).default({}),
+        }),
+      }),
+    ),
+  }),
+});
+
+const numbersOnly = (values: Record<string, number | null>): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(values).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number",
+    ),
+  );
+
+export function parseDemographics(data: unknown): AnchorAudience[] {
+  return demographicsSchema.parse(data).results.demographics.map((entry) => ({
+    anchorId: entry.entity_id,
+    age: numbersOnly(entry.query.age),
+    gender: numbersOnly(entry.query.gender),
+  }));
 }
