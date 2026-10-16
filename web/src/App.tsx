@@ -7,12 +7,16 @@ import {
   findCity,
   rescore,
   scenarioFor,
+  type Anchor,
+  type ChatReply,
   type HealthStatus,
   type ScoutResult,
   type TraceStep,
   type Zone,
 } from "@whitespace/shared";
-import { streamScout } from "./api/scout.js";
+import { chatState, sendChat } from "./api/chat.js";
+import { streamScout, type ScoutRequestBody } from "./api/scout.js";
+import { ChatPanel, type ChatEntry } from "./chat/ChatPanel.js";
 import { briefFileName, buildBrief, downloadText } from "./brief.js";
 import type { MapCapture } from "./map/capture.js";
 import { polygonsBBox } from "./map/bounds.js";
@@ -73,9 +77,15 @@ export function App(): React.JSX.Element {
   const running = useRef<AbortController | null>(null);
   const mapCapture = useRef<MapCapture | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [liveAnchors, setLiveAnchors] = useState<Anchor[]>();
+  const [chatEntries, setChatEntries] = useState<ChatEntry[]>([]);
+  const [chatPending, setChatPending] = useState(false);
+  const [chatError, setChatError] = useState<string>();
+  const chatSerial = useRef(0);
 
   const city = findCity(cityId) ?? DEFAULT_CITY;
   const scenario = scenarioFor(cityId);
+  const usesScenario = scenario !== undefined && concept.trim() === scenario.concept.trim();
 
   const view = useMemo(
     () =>
@@ -118,6 +128,9 @@ export function App(): React.JSX.Element {
     setResult(null);
     setStatus({ kind: "idle" });
     setLiveSteps([]);
+    setLiveAnchors(undefined);
+    setChatEntries([]);
+    setChatError(undefined);
     setExcluded([]);
     setSelectedZoneId(undefined);
     setConceptCollapsed(false);
@@ -125,7 +138,7 @@ export function App(): React.JSX.Element {
   };
 
   const run = async () => {
-    if (!scenario) return;
+    if (!concept.trim()) return;
     running.current?.abort();
     const controller = new AbortController();
     running.current = controller;
@@ -134,13 +147,21 @@ export function App(): React.JSX.Element {
     setExcluded([]);
     setSelectedZoneId(undefined);
     setSheetExpanded(false);
+    setLiveAnchors(undefined);
+    setChatEntries([]);
+    setChatError(undefined);
     const started = performance.now();
     let focused = false;
+    const body: ScoutRequestBody =
+      usesScenario && scenario
+        ? { concept, cityId, anchors: scenario.anchors, categoryTags: scenario.categoryTags }
+        : { concept, cityId };
     try {
       const next = await streamScout(
-        { concept, cityId, anchors: scenario.anchors, categoryTags: scenario.categoryTags },
+        body,
         (event) => {
           if (event.type === "step") setLiveSteps((steps) => [...steps, event.step]);
+          if (event.type === "anchors") setLiveAnchors(event.anchors);
           if (event.type !== "result") return;
           setResult(event.result);
           if (focused) return;
@@ -163,6 +184,67 @@ export function App(): React.JSX.Element {
         kind: "error",
         message: error instanceof Error ? error.message : "The analysis failed.",
       });
+    }
+  };
+
+  const applyChatReply = (reply: ChatReply, started: number) => {
+    const next = reply.result;
+    if (next) {
+      running.current?.abort();
+      setResult((current) =>
+        reply.fresh || !current ? next : { ...next, trace: [...current.trace, ...next.trace] },
+      );
+      setCompetitionWeight(next.params.competitionWeight);
+      setExcluded(next.params.excludePolygons);
+      if (reply.fresh) {
+        setCityId(next.city.id);
+        setConcept(next.concept);
+        setLiveSteps(next.trace);
+        setLiveAnchors(undefined);
+        setStatus({ kind: "done", ms: performance.now() - started });
+        setConceptCollapsed(true);
+      }
+    }
+    const zones = next?.zones ?? result?.zones ?? [];
+    const focusAction = [...reply.actions].reverse().find((action) => action.type === "focusZone");
+    const zone = focusAction && zones.find((candidate) => candidate.id === focusAction.zoneId);
+    const bbox = zone
+      ? polygonsBBox([zone.polygon])
+      : next
+        ? polygonsBBox(next.zones.map((candidate) => candidate.polygon))
+        : undefined;
+    setSelectedZoneId(zone?.id);
+    if (bbox) setFocus({ key: `chat-${Date.now()}`, bbox });
+  };
+
+  const sendMessage = async (text: string) => {
+    chatSerial.current += 1;
+    const question: ChatEntry = { id: chatSerial.current, role: "user", text };
+    const history = [...chatEntries, question];
+    setChatEntries(history);
+    setChatPending(true);
+    setChatError(undefined);
+    const started = performance.now();
+    try {
+      const reply = await sendChat(
+        history.map(({ role, text: message }) => ({ role, text: message })),
+        result && status.kind !== "running"
+          ? chatState(result, competitionWeight, excluded, zones)
+          : undefined,
+      );
+      chatSerial.current += 1;
+      const answer: ChatEntry = {
+        id: chatSerial.current,
+        role: "assistant",
+        text: reply.reply,
+        basic: reply.mode === "basic",
+      };
+      setChatEntries((current) => [...current, answer]);
+      applyChatReply(reply, started);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "The assistant failed.");
+    } finally {
+      setChatPending(false);
     }
   };
 
@@ -228,7 +310,11 @@ export function App(): React.JSX.Element {
         badge={<DataBadge api={api} />}
         concept={concept}
         cityId={city.id}
-        anchors={scenario?.anchors}
+        anchors={
+          status.kind === "running"
+            ? liveAnchors
+            : (result?.anchors ?? (usesScenario ? scenario?.anchors : undefined))
+        }
         status={status}
         liveSteps={liveSteps}
         collapsed={conceptCollapsed}
@@ -236,6 +322,16 @@ export function App(): React.JSX.Element {
         onConceptChange={setConcept}
         onCityChange={changeCity}
         onRun={() => void run()}
+        chat={
+          <ChatPanel
+            entries={chatEntries}
+            pending={chatPending}
+            error={chatError}
+            agent={api.kind === "ready" && api.health.llm}
+            hasResult={result !== null && status.kind !== "running"}
+            onSend={(text) => void sendMessage(text)}
+          />
+        }
       />
 
       {view && result && (
