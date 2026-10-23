@@ -82,6 +82,8 @@ export function App(): React.JSX.Element {
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState<string>();
   const chatSerial = useRef(0);
+  const chatRequest = useRef<AbortController | null>(null);
+  const [conceptFormOpen, setConceptFormOpen] = useState(false);
 
   const city = findCity(cityId) ?? DEFAULT_CITY;
   const scenario = scenarioFor(cityId);
@@ -123,6 +125,7 @@ export function App(): React.JSX.Element {
     const next = findCity(nextId);
     if (!next) return;
     running.current?.abort();
+    chatRequest.current?.abort();
     setCityId(nextId);
     setConcept((current) => scenarioFor(nextId)?.concept ?? current);
     setResult(null);
@@ -140,6 +143,7 @@ export function App(): React.JSX.Element {
   const run = async () => {
     if (!concept.trim()) return;
     running.current?.abort();
+    chatRequest.current?.abort();
     const controller = new AbortController();
     running.current = controller;
     setStatus({ kind: "running" });
@@ -150,6 +154,7 @@ export function App(): React.JSX.Element {
     setLiveAnchors(undefined);
     setChatEntries([]);
     setChatError(undefined);
+    setConceptFormOpen(false);
     const started = performance.now();
     let focused = false;
     const body: ScoutRequestBody =
@@ -202,12 +207,11 @@ export function App(): React.JSX.Element {
         setLiveSteps(next.trace);
         setLiveAnchors(undefined);
         setStatus({ kind: "done", ms: performance.now() - started });
-        setConceptCollapsed(true);
       }
     }
-    const zones = next?.zones ?? result?.zones ?? [];
+    const candidates = next?.zones ?? zones;
     const focusAction = [...reply.actions].reverse().find((action) => action.type === "focusZone");
-    const zone = focusAction && zones.find((candidate) => candidate.id === focusAction.zoneId);
+    const zone = focusAction && candidates.find((candidate) => candidate.id === focusAction.zoneId);
     const bbox = zone
       ? polygonsBBox([zone.polygon])
       : next
@@ -217,7 +221,19 @@ export function App(): React.JSX.Element {
     if (bbox) setFocus({ key: `chat-${Date.now()}`, bbox });
   };
 
+  const toggleConcept = () => {
+    const collapsing = !conceptCollapsed;
+    setConceptCollapsed(collapsing);
+    if (!collapsing || zones.length === 0) return;
+    const selected = zones.find((zone) => zone.id === selectedZoneId);
+    const bbox = polygonsBBox((selected ? [selected] : zones).map((zone) => zone.polygon));
+    if (bbox) setFocus({ key: `collapse-${Date.now()}`, bbox });
+  };
+
   const sendMessage = async (text: string) => {
+    chatRequest.current?.abort();
+    const controller = new AbortController();
+    chatRequest.current = controller;
     chatSerial.current += 1;
     const question: ChatEntry = { id: chatSerial.current, role: "user", text };
     const history = [...chatEntries, question];
@@ -231,6 +247,7 @@ export function App(): React.JSX.Element {
         result && status.kind !== "running"
           ? chatState(result, competitionWeight, excluded, zones)
           : undefined,
+        controller.signal,
       );
       chatSerial.current += 1;
       const answer: ChatEntry = {
@@ -242,9 +259,13 @@ export function App(): React.JSX.Element {
       setChatEntries((current) => [...current, answer]);
       applyChatReply(reply, started);
     } catch (error) {
+      if (controller.signal.aborted) return;
       setChatError(error instanceof Error ? error.message : "The assistant failed.");
     } finally {
-      setChatPending(false);
+      if (chatRequest.current === controller) {
+        chatRequest.current = null;
+        setChatPending(false);
+      }
     }
   };
 
@@ -290,7 +311,9 @@ export function App(): React.JSX.Element {
   };
 
   return (
-    <div className={`app${view && result ? " has-sheet" : ""}`}>
+    <div
+      className={`app${view && result ? " has-sheet" : ""}${conceptCollapsed ? "" : " concept-open"}`}
+    >
       <MapView
         focus={focus}
         cells={view?.cells ?? []}
@@ -304,6 +327,7 @@ export function App(): React.JSX.Element {
         hoveredZoneId={hoveredZoneId}
         onSelectZone={selectZone}
         captureRef={mapCapture}
+        conceptOpen={!conceptCollapsed}
       />
 
       <ConceptPanel
@@ -318,7 +342,11 @@ export function App(): React.JSX.Element {
         status={status}
         liveSteps={liveSteps}
         collapsed={conceptCollapsed}
-        onToggleCollapsed={() => setConceptCollapsed((current) => !current)}
+        canCollapse={result !== null}
+        compact={chatEntries.length > 0 && !conceptFormOpen}
+        hasConversation={chatEntries.length > 0}
+        onCompactChange={(compact) => setConceptFormOpen(!compact)}
+        onToggleCollapsed={toggleConcept}
         onConceptChange={setConcept}
         onCityChange={changeCity}
         onRun={() => void run()}
@@ -329,6 +357,7 @@ export function App(): React.JSX.Element {
             error={chatError}
             agent={api.kind === "ready" && api.health.llm}
             hasResult={result !== null && status.kind !== "running"}
+            disabled={status.kind === "running"}
             onSend={(text) => void sendMessage(text)}
           />
         }

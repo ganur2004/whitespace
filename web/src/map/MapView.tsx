@@ -52,11 +52,14 @@ export interface MapViewProps {
   hoveredZoneId: string | undefined;
   onSelectZone: (zoneId: string) => void;
   captureRef?: { current: MapCapture | null };
+  conceptOpen?: boolean;
 }
 
-function focusPadding(width: number, height: number) {
-  return width >= 960
-    ? { top: 56, bottom: 200, left: 400, right: 460 }
+function focusPadding(width: number, height: number, conceptOpen: boolean) {
+  if (width > 1180) return { top: 56, bottom: 200, left: 400, right: 460 };
+  if (width > 960) return { top: 56, bottom: 280, left: 356, right: 420 };
+  return conceptOpen
+    ? { top: Math.round(height * 0.6) + 24, bottom: 24, left: 24, right: 24 }
     : { top: 88, bottom: Math.round(height * 0.4) + 24, left: 24, right: 24 };
 }
 
@@ -73,6 +76,7 @@ export function MapView({
   hoveredZoneId,
   onSelectZone,
   captureRef,
+  conceptOpen = false,
 }: MapViewProps): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -80,6 +84,7 @@ export function MapView({
   const modeRef = useRef(mode);
   const selectRef = useRef(onSelectZone);
   const zonesRef = useRef(zones);
+  const conceptOpenRef = useRef(conceptOpen);
   const initialBbox = useRef(focus.bbox);
   const [ready, setReady] = useState(false);
 
@@ -87,6 +92,7 @@ export function MapView({
     modeRef.current = mode;
     selectRef.current = onSelectZone;
     zonesRef.current = zones;
+    conceptOpenRef.current = conceptOpen;
   });
 
   useEffect(() => {
@@ -236,7 +242,7 @@ export function MapView({
     if (!ready || !instance) return;
     const { clientWidth, clientHeight } = instance.getContainer();
     instance.fitBounds(focus.bbox as LngLatBoundsLike, {
-      padding: focusPadding(clientWidth, clientHeight),
+      padding: focusPadding(clientWidth, clientHeight, conceptOpenRef.current),
       duration: 1200,
       maxZoom: 14.5,
     });

@@ -12,6 +12,7 @@ export interface ChatPanelProps {
   error: string | undefined;
   agent: boolean;
   hasResult: boolean;
+  disabled: boolean;
   onSend: (text: string) => void;
 }
 
@@ -28,6 +29,7 @@ export function ChatPanel({
   error,
   agent,
   hasResult,
+  disabled,
   onSend,
 }: ChatPanelProps): React.JSX.Element {
   const [draft, setDraft] = useState("");
@@ -40,7 +42,7 @@ export function ChatPanel({
 
   const submit = (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || pending) return;
+    if (!trimmed || pending || disabled) return;
     onSend(trimmed);
     setDraft("");
   };
@@ -77,7 +79,7 @@ export function ChatPanel({
                 type="button"
                 className="chip chip-action"
                 onClick={() => submit(suggestion)}
-                disabled={pending}
+                disabled={pending || disabled}
               >
                 {suggestion}
               </button>
@@ -97,16 +99,18 @@ export function ChatPanel({
           value={draft}
           maxLength={2000}
           placeholder={
-            hasResult
-              ? "Exclude an area, compare zones, explain a place…"
-              : agent
-                ? "Or describe a concept and a city here…"
-                : "Run an analysis, then ask here"
+            disabled
+              ? "Wait for the analysis…"
+              : hasResult
+                ? "Ask about zones, areas, places…"
+                : agent
+                  ? "Or describe a concept and a city here…"
+                  : "Run an analysis, then ask here"
           }
           aria-label="Message"
           onChange={(event) => setDraft(event.target.value)}
         />
-        <button type="submit" className="secondary" disabled={pending || !draft.trim()}>
+        <button type="submit" className="secondary" disabled={pending || disabled || !draft.trim()}>
           Send
         </button>
       </form>

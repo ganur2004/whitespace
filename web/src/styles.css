@@ -81,9 +81,45 @@ textarea {
 .panel-left {
   left: 16px;
   width: var(--panel-left);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.concept-body[hidden] {
+  display: none;
+}
+
+.concept-hide {
+  justify-self: end;
+}
+
+.concept-compact {
   display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.concept-compact-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.concept-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 0 1 auto;
   gap: 12px;
   align-content: start;
+  min-height: 120px;
+  margin: 0 -18px;
+  padding: 2px 18px;
+  overflow-y: auto;
 }
 
 .panel-right {
@@ -667,6 +703,15 @@ textarea {
   margin: 4px 0 0;
 }
 
+.progress-done-summary summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.progress-done-summary[open] summary {
+  margin-bottom: 6px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -699,12 +744,25 @@ textarea {
 }
 
 @media (max-width: 1180px) {
+  :root {
+    --panel-left: 312px;
+    --panel-right: 330px;
+  }
+
   .map-controls-floating {
-    left: auto;
-    right: calc(64px + var(--panel-right) + 16px);
-    width: 300px;
+    left: calc(16px + var(--panel-left) + 12px);
+    right: calc(64px + var(--panel-right) + 12px);
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+  }
+
+  .map-controls-floating .slider {
+    min-width: 0;
+  }
+
+  .map-controls-floating .legend-ramp {
+    width: 100%;
   }
 }
 
@@ -734,9 +792,20 @@ textarea {
     display: none;
   }
 
+  .panel-left.can-collapse:not(.is-collapsed) .collapse-toggle {
+    display: inline;
+  }
+
   .collapsed-summary {
     display: block;
     margin: 2px 0 0 24px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .app.concept-open .panel-right {
+    display: none;
   }
 
   .panel-right {
@@ -804,6 +873,14 @@ textarea {
   .app.has-sheet .maplibregl-ctrl-bottom-right {
     bottom: 40%;
   }
+
+  .app.has-sheet.concept-open .maplibregl-ctrl-top-right {
+    bottom: 32px;
+  }
+
+  .app.has-sheet.concept-open .maplibregl-ctrl-bottom-right {
+    bottom: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -814,6 +891,8 @@ textarea {
 
 .chat {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: none;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -828,11 +907,15 @@ textarea {
 .chat-log {
   display: grid;
   gap: 6px;
-  max-height: 260px;
+  max-height: 36vh;
   margin: 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
+}
+
+.panel-left.is-editing .chat-log {
+  max-height: 18vh;
 }
 
 .chat-message {
@@ -860,9 +943,15 @@ textarea {
   color: var(--muted);
 }
 
+.chat-suggestions li {
+  max-width: 100%;
+}
+
 .chat-suggestions .chip-action {
+  max-width: 100%;
   font: inherit;
   font-size: 13px;
+  text-align: left;
 }
 
 .chat-form {
@@ -872,6 +961,7 @@ textarea {
 
 .chat-form input {
   flex: 1;
+  width: 100%;
   min-width: 0;
   padding: 7px 10px;
   border: 1px solid var(--border);
@@ -884,4 +974,36 @@ textarea {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .chat-log {
+    max-height: 26vh;
+  }
+
+  .panel-left.is-editing .chat-log {
+    max-height: 14vh;
+  }
+
+  .chat-suggestions {
+    flex-wrap: nowrap;
+    margin: 0 -18px;
+    padding: 0 18px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .chat-suggestions li {
+    flex: none;
+    max-width: none;
+  }
+
+  .chat-suggestions .chip-action {
+    max-width: none;
+    white-space: nowrap;
+  }
+
+  .panel-left.can-collapse .tagline {
+    display: none;
+  }
 }
