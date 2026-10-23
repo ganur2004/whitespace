@@ -141,8 +141,10 @@ export function chatRoutes(
     const started = Date.now();
     try {
       const reply = await chat(parsed.data.messages, analysis, { qloo, llm });
+      const live = analysis.trace.filter((step) => !step.cached).length;
+      if (!llm && live === 0) options.limiter.refund(client);
       console.log(
-        `chat mode=${reply.mode} ms=${Date.now() - started} calls=${analysis.trace.length} live=${analysis.trace.filter((step) => !step.cached).length}${reply.result ? " result" : ""}`,
+        `chat mode=${reply.mode} ms=${Date.now() - started} calls=${analysis.trace.length} live=${live}${reply.result ? " result" : ""}`,
       );
       return c.json(reply);
     } catch (error) {

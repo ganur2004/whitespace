@@ -14,6 +14,10 @@ export interface ConceptPanelProps {
   status: RunStatus;
   liveSteps: readonly TraceStep[];
   collapsed: boolean;
+  canCollapse: boolean;
+  compact: boolean;
+  hasConversation: boolean;
+  onCompactChange: (compact: boolean) => void;
   onToggleCollapsed: () => void;
   onConceptChange: (concept: string) => void;
   onCityChange: (cityId: string) => void;
@@ -57,6 +61,10 @@ export function ConceptPanel({
   status,
   liveSteps,
   collapsed,
+  canCollapse,
+  compact,
+  hasConversation,
+  onCompactChange,
   onToggleCollapsed,
   onConceptChange,
   onCityChange,
@@ -66,7 +74,10 @@ export function ConceptPanel({
   const running = status.kind === "running";
   const city = CITIES.find((option) => option.id === cityId);
   return (
-    <section className={`panel panel-left${collapsed ? " is-collapsed" : ""}`} aria-label="Concept">
+    <section
+      className={`panel panel-left${collapsed ? " is-collapsed" : ""}${canCollapse ? " can-collapse" : ""}${hasConversation && !compact ? " is-editing" : ""}`}
+      aria-label="Concept"
+    >
       <header className="brand">
         <span className="brand-mark" aria-hidden="true" />
         <h1>Whitespace</h1>
@@ -77,71 +88,100 @@ export function ConceptPanel({
           aria-expanded={!collapsed}
           onClick={onToggleCollapsed}
         >
-          {collapsed ? "Edit" : "Hide"}
+          {collapsed ? "Edit or ask" : "Hide"}
         </button>
       </header>
-      {collapsed && city && <p className="collapsed-summary small muted">{city.name}</p>}
+      {collapsed && city && (
+        <p className="collapsed-summary small muted">
+          {city.name}
+          {concept.trim() ? ` · ${concept.trim()}` : ""}
+        </p>
+      )}
 
-      <p className="tagline">Where your audience already is, and your competitors are not.</p>
-
-      <label className="field">
-        <span>Concept</span>
-        <textarea
-          rows={3}
-          value={concept}
-          onChange={(event) => onConceptChange(event.target.value)}
-        />
-      </label>
-
-      <label className="field">
-        <span>City</span>
-        <select value={cityId} onChange={(event) => onCityChange(event.target.value)}>
-          {CITIES.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <button
-        type="button"
-        className="primary"
-        onClick={onRun}
-        disabled={running || !concept.trim()}
-      >
-        {running ? "Analysing…" : "Find spots"}
-      </button>
-
-      {anchors && anchors.length > 0 && (
-        <div className="anchors">
-          <span className="field-label">Taste anchors</span>
-          <ul className="chips">
-            {anchors.map((anchor) => (
-              <li
-                key={anchor.id}
-                className="chip"
-                title={anchor.localCompetitor ? "A similar venue in this city" : undefined}
-              >
-                {anchor.name}
-                {anchor.localCompetitor && <span className="muted"> · local</span>}
-              </li>
-            ))}
-          </ul>
+      {compact && city && (
+        <div className="concept-compact">
+          <p className="concept-compact-text small">
+            <strong>{city.name}</strong>
+            {concept.trim() ? ` · ${concept.trim()}` : ""}
+          </p>
+          <button type="button" className="link-button" onClick={() => onCompactChange(false)}>
+            Edit concept
+          </button>
         </div>
       )}
 
-      <div className="status small" role="status" aria-live="polite">
-        {(running || liveSteps.length > 0) && status.kind !== "error" && (
-          <Progress steps={liveSteps} running={running} />
+      <div className="concept-body" hidden={compact}>
+        {hasConversation && (
+          <button
+            type="button"
+            className="link-button concept-hide"
+            onClick={() => onCompactChange(true)}
+          >
+            Done editing
+          </button>
         )}
-        {status.kind === "done" && (
-          <p className="muted">
-            Done in {(status.ms / 1000).toFixed(1)} s · {liveSteps.length} Qloo{" "}
-            {liveSteps.length === 1 ? "call" : "calls"}
-          </p>
+        <p className="tagline">Where your audience already is, and your competitors are not.</p>
+
+        <label className="field">
+          <span>Concept</span>
+          <textarea
+            rows={3}
+            value={concept}
+            onChange={(event) => onConceptChange(event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>City</span>
+          <select value={cityId} onChange={(event) => onCityChange(event.target.value)}>
+            {CITIES.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="primary"
+          onClick={onRun}
+          disabled={running || !concept.trim()}
+        >
+          {running ? "Analysing…" : "Find spots"}
+        </button>
+
+        {anchors && anchors.length > 0 && (
+          <div className="anchors">
+            <span className="field-label">Taste anchors</span>
+            <ul className="chips">
+              {anchors.map((anchor) => (
+                <li
+                  key={anchor.id}
+                  className="chip"
+                  title={anchor.localCompetitor ? "A similar venue in this city" : undefined}
+                >
+                  {anchor.name}
+                  {anchor.localCompetitor && <span className="muted"> · local</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-        {status.kind === "error" && <p className="error">{status.message}</p>}
+
+        <div className="status small" role="status" aria-live="polite">
+          {running && <Progress steps={liveSteps} running />}
+          {status.kind === "done" && (
+            <details className="progress-done-summary">
+              <summary>
+                Done in {(status.ms / 1000).toFixed(1)} s · {liveSteps.length} Qloo{" "}
+                {liveSteps.length === 1 ? "call" : "calls"}
+              </summary>
+              <Progress steps={liveSteps} running={false} />
+            </details>
+          )}
+          {status.kind === "error" && <p className="error">{status.message}</p>}
+        </div>
       </div>
 
       {chat}
