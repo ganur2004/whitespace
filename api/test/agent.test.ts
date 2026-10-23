@@ -14,6 +14,7 @@ import { parseCommand } from "../src/agent/basic.js";
 import { EntityRegistry, render } from "../src/agent/grounding.js";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
+import { IpRateLimiter } from "../src/limits.js";
 import { SyntheticFixtures } from "../src/demo/fixtures.js";
 import { BedrockLlm } from "../src/llm/bedrock.js";
 import type { LlmClient, LlmRequest } from "../src/llm/client.js";
@@ -372,6 +373,24 @@ describe("POST /api/chat", () => {
     const reply = (await response.json()) as ChatReply;
     expect(reply.reply).toMatch(/Find spots/);
     expect(reply.result).toBeUndefined();
+  });
+
+  it("does not spend the chat limit on basic answers served from cache", async () => {
+    const config = loadConfig({
+      DEMO_MODE: "true",
+      FIXTURES_DIR,
+      QLOO_CACHE_DIR: resolve(FIXTURES_DIR, "missing"),
+    });
+    const limited = createApp(config, { llm: null, chatLimiter: new IpRateLimiter(1, 1) });
+    const send = () =>
+      limited.request("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", text: "hi" }] }),
+      });
+
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200);
   });
 
   it("rejects a conversation that does not end with the user", async () => {

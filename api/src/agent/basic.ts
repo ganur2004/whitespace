@@ -100,7 +100,7 @@ export async function runBasic(
     const text = changesZones
       ? `${outcome.text.split("\n")[0] ?? ""}\n${analysis.summary()}`
       : substitute(compactText(command, analysis) ?? outcome.text, analysis.registry).replace(
-          /\n\s*/g,
+          /\n[ \t]*/g,
           "\n",
         );
     return { text: text.trim(), actions };
@@ -125,7 +125,7 @@ function compactText(command: BasicCommand, analysis: Analysis): string | undefi
   }
   if (command.tool === "compare_zones") {
     const lines = [line(command.input.a), line(command.input.b)];
-    return lines.every(Boolean) ? lines.join("\n") : undefined;
+    return lines.every(Boolean) ? lines.join("\n\n") : undefined;
   }
   return undefined;
 }
