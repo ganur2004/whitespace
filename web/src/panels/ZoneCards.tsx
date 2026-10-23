@@ -105,6 +105,7 @@ export function ZoneCards({
           {zone.profile && zone.profile.tastePlaces.length > 0 && (
             <TastePlaces places={zone.profile.tastePlaces} anchorNames={anchorNames} />
           )}
+          {zone.profile?.brief && <p className="zone-brief">{zone.profile.brief}</p>}
           {!zone.profile && profilesLoading.has(zone.id) && (
             <p className="muted small">Finding what locals here love…</p>
           )}

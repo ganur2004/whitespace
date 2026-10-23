@@ -10,6 +10,8 @@
     "start": "node --env-file-if-exists=../.env dist/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.35.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@hono/node-server": "^2.1.4",
     "@whitespace/shared": "*",
     "hono": "^4.13.13",

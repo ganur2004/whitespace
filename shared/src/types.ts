@@ -116,25 +116,44 @@ export interface ScoutResult {
 
 export type ScoutEvent =
   | { type: "step"; step: TraceStep }
-  | { type: "anchors"; anchors: Anchor[] }
+  | { type: "anchors"; anchors: Anchor[]; categoryTags: { id: string; name: string }[] }
   | { type: "result"; result: ScoutResult }
   | { type: "error"; message: string };
+
+export type CompactCell = [geohash: string, affinity: number, popularity?: number];
 
 export interface ChatState {
   concept: string;
   cityId: string;
   anchors: Anchor[];
+  categoryTags: { id: string; name: string }[];
   params: ScoringParams;
-  cells: [string, number][];
+  cells: CompactCell[];
   competitors: PlaceRef[];
-  zones: Zone[];
+  zones: { id: string; profile?: ZoneProfile }[];
+  audience?: AudiencePortrait;
+  demo: boolean;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  text: string;
 }
 
 export type ChatAction =
   { type: "focusZone"; zoneId: string } | { type: "highlightPlaces"; placeIds: string[] };
 
+export interface ChatReply {
+  reply: string;
+  mode: "agent" | "basic";
+  result?: ScoutResult;
+  fresh?: boolean;
+  actions: ChatAction[];
+}
+
 export interface HealthStatus {
   ok: true;
   demo: boolean;
   qlooKey: boolean;
+  llm: boolean;
 }

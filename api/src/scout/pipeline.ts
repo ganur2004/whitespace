@@ -21,13 +21,23 @@ import type { QlooClient, QlooResult } from "../qloo/client.js";
 import type { QlooEndpoint, QlooParams } from "../qloo/params.js";
 import { parseDemographics, parseHeatmap, parsePlaces, type ParsedHeatmap } from "../qloo/types.js";
 import { profileZones } from "../profile/profile.js";
+import type { LlmClient } from "../llm/client.js";
+import { Analysis } from "../agent/analysis.js";
+import { writeBriefs } from "../agent/briefs.js";
+import { planConcept, resolveConcept } from "./concept.js";
 
 export interface ScoutInput {
   concept: string;
   cityId: string;
   anchors: Anchor[];
-  categoryTags: { id: string; name: string }[];
+  categoryTags?: { id: string; name: string }[];
+  referencePlaces?: string[];
   params?: Partial<Pick<ScoringParams, "competitionWeight" | "minAffinity">>;
+}
+
+export interface ScoutOptions {
+  llm?: LlmClient | undefined;
+  logger?: Pick<Console, "warn">;
 }
 
 export class ScoutInputError extends Error {
@@ -50,10 +60,14 @@ export async function runScout(
   input: ScoutInput,
   qloo: QlooClient,
   emit: (event: ScoutEvent) => void = () => {},
+  options: ScoutOptions = {},
 ): Promise<ScoutResult> {
   const city = findCity(input.cityId);
   if (!city) throw new ScoutInputError(`Unknown city: ${input.cityId}`);
-  if (input.anchors.length === 0) throw new ScoutInputError("At least one anchor is required");
+  const logger = options.logger ?? console;
+  if (input.anchors.length === 0 && !input.concept.trim() && !input.referencePlaces?.length) {
+    throw new ScoutInputError("Describe the concept or name at least one anchor");
+  }
 
   const trace: TraceStep[] = [];
   let demo = false;
@@ -65,11 +79,31 @@ export async function runScout(
     return result;
   };
 
-  emit({ type: "anchors", anchors: input.anchors });
-  const anchorIds = input.anchors.map((anchor) => anchor.id).join(",");
+  let anchors = input.anchors;
+  let categoryTags = input.categoryTags ?? [];
+  if (anchors.length === 0) {
+    const { plan } = await planConcept(
+      input.concept,
+      city,
+      input.referencePlaces ?? [],
+      options.llm,
+      logger,
+    );
+    const resolved = await resolveConcept(plan, city, call, logger);
+    anchors = resolved.anchors;
+    if (input.categoryTags === undefined) categoryTags = resolved.categoryTags;
+    if (anchors.length === 0) {
+      throw new ScoutInputError(
+        "Qloo found no entities for this concept. Name a few venues, artists or brands that capture it.",
+      );
+    }
+  }
+
+  emit({ type: "anchors", anchors, categoryTags });
+  const anchorIds = anchors.map((anchor) => anchor.id).join(",");
   const [heatmap, competitors, audience] = await Promise.all([
     loadHeatmap(city, anchorIds, call),
-    loadCompetitors(city, input.categoryTags, anchorIds, call),
+    loadCompetitors(city, categoryTags, anchorIds, call),
     loadAudience(anchorIds, call),
   ]);
 
@@ -79,8 +113,8 @@ export async function runScout(
   const base: ScoutResult = {
     concept: input.concept,
     city: heatmap.locality ? { ...city, resolvedLocality: heatmap.locality } : { ...city },
-    anchors: input.anchors,
-    categoryTags: input.categoryTags,
+    anchors,
+    categoryTags,
     affinityMode: "percentile",
     cells,
     competitors,
@@ -95,11 +129,11 @@ export async function runScout(
   const profiles = await profileZones(
     zones,
     anchorIds,
-    new Set(input.categoryTags.map((tag) => tag.id)),
+    new Set(categoryTags.map((tag) => tag.id)),
     call,
-    (zone, error) => console.warn(`Zone ${zone.rank ?? zone.id} profile failed`, error),
+    (zone, error) => logger.warn(`Zone ${zone.rank ?? zone.id} profile failed`, error),
   );
-  const result: ScoutResult = {
+  const profiled: ScoutResult = {
     ...base,
     zones: zones.map((zone) => {
       const profile = profiles[zone.id];
@@ -108,6 +142,13 @@ export async function runScout(
     trace: [...trace],
     demo,
   };
+  emit({ type: "result", result: profiled });
+  if (!options.llm || profiled.zones.length === 0) return profiled;
+
+  const analysis = new Analysis(undefined, undefined, logger);
+  analysis.adopt(profiled);
+  await writeBriefs(analysis, options.llm, logger);
+  const result: ScoutResult = { ...analysis.require(), trace: [...trace], demo };
   emit({ type: "result", result });
   return result;
 }

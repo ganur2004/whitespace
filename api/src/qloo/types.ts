@@ -226,3 +226,68 @@ export function parseDemographics(data: unknown): AnchorAudience[] {
     gender: numbersOnly(entry.query.gender),
   }));
 }
+
+const searchHitSchema = z.object({
+  entity_id: z.string().min(1),
+  name: z.string().min(1),
+  types: z.array(z.string()).nullish(),
+  subtype: z.string().nullish(),
+  location: z.object({ lat: z.number(), lon: z.number() }).nullish(),
+  tags: z.array(z.object({ id: z.string().nullish(), tag_id: z.string().nullish() })).nullish(),
+});
+
+export interface SearchHit {
+  id: string;
+  name: string;
+  type?: string;
+  location?: LonLat;
+  tags: string[];
+}
+
+export function parseSearch(data: unknown): SearchHit[] {
+  const results = z.object({ results: z.array(z.unknown()) }).parse(data).results;
+  return results.flatMap((raw) => {
+    const parsed = searchHitSchema.safeParse(raw);
+    if (!parsed.success) return [];
+    const entity = parsed.data;
+    const hit: SearchHit = {
+      id: entity.entity_id,
+      name: entity.name,
+      tags: (entity.tags ?? []).flatMap((tag) => tag.tag_id ?? tag.id ?? []),
+    };
+    const type =
+      entity.types?.find((value) => value.startsWith("urn:entity:")) ?? entity.subtype ?? undefined;
+    if (type?.startsWith("urn:entity:")) hit.type = type;
+    const location = entity.location;
+    if (location && isValidLonLat([location.lon, location.lat])) {
+      hit.location = [location.lon, location.lat];
+    }
+    return [hit];
+  });
+}
+
+const tagSchema = z.object({
+  id: z.string().nullish(),
+  tag_id: z.string().nullish(),
+  name: z.string().min(1),
+  type: z.string().nullish(),
+});
+
+export interface TagHit {
+  id: string;
+  name: string;
+  type?: string;
+}
+
+export function parseTags(data: unknown): TagHit[] {
+  const tags = z.object({ results: z.object({ tags: z.array(z.unknown()) }) }).parse(data)
+    .results.tags;
+  return tags.flatMap((raw) => {
+    const parsed = tagSchema.safeParse(raw);
+    const id = parsed.success ? (parsed.data.id ?? parsed.data.tag_id) : undefined;
+    if (!parsed.success || !id) return [];
+    const tag: TagHit = { id, name: parsed.data.name };
+    if (parsed.data.type) tag.type = parsed.data.type;
+    return [tag];
+  });
+}

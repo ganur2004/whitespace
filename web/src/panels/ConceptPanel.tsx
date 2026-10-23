@@ -18,6 +18,7 @@ export interface ConceptPanelProps {
   onConceptChange: (concept: string) => void;
   onCityChange: (cityId: string) => void;
   onRun: () => void;
+  chat: React.ReactNode;
 }
 
 const UNITS: Record<string, [string, string]> = {
@@ -60,6 +61,7 @@ export function ConceptPanel({
   onConceptChange,
   onCityChange,
   onRun,
+  chat,
 }: ConceptPanelProps): React.JSX.Element {
   const running = status.kind === "running";
   const city = CITIES.find((option) => option.id === cityId);
@@ -102,23 +104,27 @@ export function ConceptPanel({
         </select>
       </label>
 
-      <button type="button" className="primary" onClick={onRun} disabled={running || !anchors}>
+      <button
+        type="button"
+        className="primary"
+        onClick={onRun}
+        disabled={running || !concept.trim()}
+      >
         {running ? "Analysing…" : "Find spots"}
       </button>
 
-      {!anchors && (
-        <p className="muted small">
-          A ready scenario for this city arrives with live Qloo data. Try Austin for now.
-        </p>
-      )}
-
-      {anchors && (
+      {anchors && anchors.length > 0 && (
         <div className="anchors">
           <span className="field-label">Taste anchors</span>
           <ul className="chips">
             {anchors.map((anchor) => (
-              <li key={anchor.id} className="chip">
+              <li
+                key={anchor.id}
+                className="chip"
+                title={anchor.localCompetitor ? "A similar venue in this city" : undefined}
+              >
                 {anchor.name}
+                {anchor.localCompetitor && <span className="muted"> · local</span>}
               </li>
             ))}
           </ul>
@@ -137,6 +143,8 @@ export function ConceptPanel({
         )}
         {status.kind === "error" && <p className="error">{status.message}</p>}
       </div>
+
+      {chat}
     </section>
   );
 }
