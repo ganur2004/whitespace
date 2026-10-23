@@ -23,6 +23,23 @@
 | `SCOUT_LIMIT_PER_MINUTE` | `3` | Скорость восстановления лимита. Ответы целиком из кэша лимит не тратят |
 | `PROFILE_LIMIT_BURST` | `20` | Сколько запросов профилей зон подряд с одного IP (ползунок и исключения) |
 | `PROFILE_LIMIT_PER_MINUTE` | `10` | Скорость восстановления лимита профилей. Ответы из кэша не тратят |
+| `CHAT_LIMIT_BURST` | `12` | Сколько сообщений в чат подряд с одного IP |
+| `CHAT_LIMIT_PER_MINUTE` | `4` | Скорость восстановления лимита чата |
+| `AWS_BEARER_TOKEN_BEDROCK` | — | API-ключ Amazon Bedrock. Достаточно его одного, **только через секреты хостинга** |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | — | Вместо API-ключа: ключи IAM с доступом к Bedrock (`bedrock-mantle`). Подходят и `AWS_PROFILE` и роль контейнера |
+| `AWS_REGION` | `us-east-1` | Регион Bedrock, где включён доступ к модели |
+| `BEDROCK_MODEL_ID` | `anthropic.claude-opus-5-5` | Модель агента, брифов и разбора концепции |
+| `BEDROCK_FALLBACK_MODEL_ID` | `anthropic.claude-opus-4-8` | Куда повторить запрос, если основная модель отказала (`stop_reason: refusal`). `none` — без повтора |
+| `LLM_PROVIDER` | авто | `none` выключает LLM даже при наличии ключей AWS; `bedrock` включает без явных ключей (цепочка AWS по умолчанию) |
+
+## LLM (Amazon Bedrock)
+
+Агент, брифы зон и разбор концепции в якоря работают через Claude в Amazon Bedrock (`@anthropic-ai/bedrock-sdk`, клиент `AnthropicBedrockMantle`, эндпоинт `https://bedrock-mantle.<region>.api.aws/anthropic`).
+
+- Включается сам, как только в окружении есть ключи AWS: `AWS_BEARER_TOKEN_BEDROCK` или пара `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (плюс `AWS_REGION`). `/health` показывает `"llm": true`.
+- В AWS-аккаунте должен быть открыт доступ к модели из `BEDROCK_MODEL_ID` в выбранном регионе.
+- Без ключей или при ошибке Bedrock ничего не ломается: чат отвечает в «Basic mode» (шаблонные команды), концепция разбирается по ключевым словам, брифы — шаблонные или не пишутся. В логе строка `The agent failed; answering in basic mode. <причина>`.
+- Проверка после деплоя: `curl <url>/health`, затем в интерфейсе написать в чат «Compare zone 1 and zone 2». Ответ без пометки «basic mode» значит, что Bedrock отвечает.
 
 ## Проверить локально
 

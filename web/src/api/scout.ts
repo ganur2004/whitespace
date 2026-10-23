@@ -4,8 +4,8 @@ import { splitSse } from "./sse.js";
 export interface ScoutRequestBody {
   concept: string;
   cityId: string;
-  anchors: Anchor[];
-  categoryTags: { id: string; name: string }[];
+  anchors?: Anchor[];
+  categoryTags?: { id: string; name: string }[];
 }
 
 export async function streamScout(

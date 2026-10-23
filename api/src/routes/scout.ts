@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { Anchor, ScoutEvent, ScoutResult } from "@whitespace/shared";
 import { clientAddress, type IpRateLimiter } from "../limits.js";
+import type { LlmClient } from "../llm/client.js";
 import { QlooError, type QlooClient } from "../qloo/client.js";
 import { QlooParamError } from "../qloo/params.js";
 import { ScoutInputError, runScout, type ScoutInput } from "../scout/pipeline.js";
@@ -18,11 +19,12 @@ const anchorSchema = z.object({
 const scoutRequestSchema = z.object({
   concept: z.string().max(1000).default(""),
   cityId: z.string().min(1),
-  anchors: z.array(anchorSchema).min(1).max(10),
+  anchors: z.array(anchorSchema).max(10).default([]),
   categoryTags: z
     .array(z.object({ id: z.string().min(1), name: z.string() }))
     .max(5)
-    .default([]),
+    .optional(),
+  referencePlaces: z.array(z.string().trim().min(1).max(80)).max(4).optional(),
   params: z
     .object({
       competitionWeight: z.number().min(0).max(1).optional(),
@@ -41,8 +43,9 @@ function toInput(request: ScoutRequest): ScoutInput {
     concept: request.concept,
     cityId: request.cityId,
     anchors,
-    categoryTags: request.categoryTags,
   };
+  if (request.categoryTags) input.categoryTags = request.categoryTags;
+  if (request.referencePlaces) input.referencePlaces = request.referencePlaces;
   const params: ScoutInput["params"] = {};
   if (request.params?.competitionWeight !== undefined) {
     params.competitionWeight = request.params.competitionWeight;
@@ -69,6 +72,7 @@ function describeFailure(error: unknown): { status: 400 | 502 | 500; message: st
 export interface ScoutRouteOptions {
   limiter: IpRateLimiter;
   trustProxy: boolean;
+  llm?: LlmClient | undefined;
 }
 
 export function scoutRoutes(qloo: QlooClient, options: ScoutRouteOptions): Hono {
@@ -111,7 +115,7 @@ export function scoutRoutes(qloo: QlooClient, options: ScoutRouteOptions): Hono 
 
     if (c.req.query("format") === "json") {
       try {
-        return c.json(finish(await runScout(input, qloo)));
+        return c.json(finish(await runScout(input, qloo, () => {}, { llm: options.llm })));
       } catch (error) {
         const failure = fail(error);
         return c.json({ error: failure.message }, failure.status);
@@ -125,7 +129,7 @@ export function scoutRoutes(qloo: QlooClient, options: ScoutRouteOptions): Hono 
         pending = pending.then(() => stream.writeSSE({ event: event.type, data }));
       };
       try {
-        finish(await runScout(input, qloo, send));
+        finish(await runScout(input, qloo, send, { llm: options.llm }));
       } catch (error) {
         send({ type: "error", message: fail(error).message });
       }

@@ -9,6 +9,9 @@ import type { Config } from "./config.js";
 import { IpRateLimiter } from "./limits.js";
 import type { QlooClient } from "./qloo/client.js";
 import { createQlooClient } from "./qloo/create.js";
+import type { LlmClient } from "./llm/client.js";
+import { createLlmClient } from "./llm/create.js";
+import { chatRoutes } from "./routes/chat.js";
 import { profileRoutes } from "./routes/profile.js";
 import { scoutRoutes } from "./routes/scout.js";
 
@@ -16,9 +19,12 @@ export interface AppDeps {
   qloo?: QlooClient;
   scoutLimiter?: IpRateLimiter;
   profileLimiter?: IpRateLimiter;
+  chatLimiter?: IpRateLimiter;
+  llm?: LlmClient | null;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_CHAT_BODY_BYTES = 1024 * 1024;
 
 export function createApp(config: Config, deps: AppDeps = {}): Hono {
   const app = new Hono();
@@ -26,14 +32,15 @@ export function createApp(config: Config, deps: AppDeps = {}): Hono {
   const limiter = deps.scoutLimiter ?? new IpRateLimiter(config.scoutBurst, config.scoutPerMinute);
   const profileLimiter =
     deps.profileLimiter ?? new IpRateLimiter(config.profileBurst, config.profilePerMinute);
+  const chatLimiter = deps.chatLimiter ?? new IpRateLimiter(config.chatBurst, config.chatPerMinute);
+  const llm = deps.llm === null ? undefined : (deps.llm ?? createLlmClient(config));
 
   app.use(secureHeaders());
-  app.use(
-    "/api/*",
+  app.use("/api/*", (c, next) =>
     bodyLimit({
-      maxSize: MAX_BODY_BYTES,
-      onError: (c) => c.json({ error: "Request body is too large" }, 413),
-    }),
+      maxSize: c.req.path === "/api/chat" ? MAX_CHAT_BODY_BYTES : MAX_BODY_BYTES,
+      onError: (context) => context.json({ error: "Request body is too large" }, 413),
+    })(c, next),
   );
 
   app.get("/health", (c) => {
@@ -41,12 +48,14 @@ export function createApp(config: Config, deps: AppDeps = {}): Hono {
       ok: true,
       demo: config.demoMode,
       qlooKey: config.qlooApiKey !== undefined,
+      llm: llm !== undefined,
     };
     return c.json(body);
   });
 
-  app.route("/", scoutRoutes(qloo, { limiter, trustProxy: config.trustProxy }));
+  app.route("/", scoutRoutes(qloo, { limiter, trustProxy: config.trustProxy, llm }));
   app.route("/", profileRoutes(qloo, { limiter: profileLimiter, trustProxy: config.trustProxy }));
+  app.route("/", chatRoutes(qloo, llm, { limiter: chatLimiter, trustProxy: config.trustProxy }));
   app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
   const indexFile = join(config.webDist, "index.html");

@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { SCENARIOS, findCity, type ScoutEvent, type ScoutResult } from "@whitespace/shared";
+import {
+  RAMEN_RESTAURANT_TAG,
+  SCENARIOS,
+  findCity,
+  type ScoutEvent,
+  type ScoutResult,
+} from "@whitespace/shared";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { SyntheticFixtures } from "../src/demo/fixtures.js";
@@ -78,7 +84,11 @@ describe("runScout on synthetic data", () => {
     expect(result.trace.map((step) => step.label)).toEqual(
       expect.arrayContaining(["Taste heatmap", "Competitors, page 1", "Competitor taste match"]),
     );
-    expect(events[0]).toEqual({ type: "anchors", anchors: scenario.anchors });
+    expect(events[0]).toEqual({
+      type: "anchors",
+      anchors: scenario.anchors,
+      categoryTags: scenario.categoryTags,
+    });
     expect(events.filter((event) => event.type === "step")).toHaveLength(result.trace.length);
     expect(events.at(-1)).toEqual({ type: "result", result });
   });
@@ -90,11 +100,37 @@ describe("runScout on synthetic data", () => {
     expect(result.trace.filter((step) => step.label.startsWith("Competitor"))).toEqual([]);
   });
 
-  it("rejects unknown cities and missing anchors", async () => {
+  it("rejects unknown cities and a run with neither anchors nor a concept", async () => {
     await expect(runScout({ ...input, cityId: "atlantis" }, demoClient())).rejects.toBeInstanceOf(
       ScoutInputError,
     );
-    await expect(runScout({ ...input, anchors: [] }, demoClient())).rejects.toThrow(/anchor/);
+    await expect(runScout({ ...input, concept: " ", anchors: [] }, demoClient())).rejects.toThrow(
+      /anchor/,
+    );
+  });
+
+  it("finds anchors and the category tag from the concept text without an LLM", async () => {
+    const events: ScoutEvent[] = [];
+    const result = await runScout(
+      {
+        concept: "A ramen bar with a vinyl corner and craft beer. Places like Ramen Tatsu-Ya.",
+        cityId: "austin",
+        anchors: [],
+      },
+      demoClient(),
+      (event) => events.push(event),
+    );
+
+    expect(result.anchors.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(result.anchors.map((anchor) => anchor.id)).size).toBe(result.anchors.length);
+    expect(result.categoryTags).toEqual([RAMEN_RESTAURANT_TAG]);
+    expect(result.trace.map((step) => step.label)).toEqual(
+      expect.arrayContaining(["Find anchor: Ramen Tatsu-Ya", "Category tag: ramen"]),
+    );
+    expect(events.find((event) => event.type === "anchors")).toMatchObject({
+      categoryTags: [RAMEN_RESTAURANT_TAG],
+    });
+    expect(result.zones).toHaveLength(3);
   });
 
   it("asks for the heatmap by locality id when the city has one", async () => {

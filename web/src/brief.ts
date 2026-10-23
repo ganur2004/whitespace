@@ -51,6 +51,7 @@ function zoneSection(zone: Zone, names: Record<string, string>): string[] {
     `- Similar venues inside the zone: ${zone.competitorsInside}; within 1 km: ${zone.competitorsNearby}`,
     `- Center: ${coordinates(zone.centroid)} ([open map](${mapLink(zone.centroid)}))`,
   ];
+  if (zone.profile?.brief) lines.push("", escapeMarkdown(zone.profile.brief));
   const places = zone.profile?.tastePlaces.slice(0, 5) ?? [];
   if (places.length > 0) {
     lines.push("", "Locals here also love:", "");
