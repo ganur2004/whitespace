@@ -12,7 +12,7 @@ An agent that finds where your new venue's audience already lives and goes out, 
 
 ## Links
 
-- Live demo: TODO: add the demo URL after deploy
+- Live demo: https://d3qszcalamj7w3.cloudfront.net
 - Code: https://github.com/ganur2004/whitespace (make the repository public before submitting)
 - Video: TODO: add the video URL
 
@@ -143,7 +143,7 @@ The project was built during the submission period; the first commit is from Oct
 
 ## Before submitting
 
-- [ ] Demo deployed, URL added above and in the README
+- [x] Demo deployed, URL added above and in the README
 - [ ] Repository public, MIT license visible in About
 - [ ] Screenshots uploaded, `docs/screenshot.png` added to the repository
 - [ ] Video uploaded and linked
