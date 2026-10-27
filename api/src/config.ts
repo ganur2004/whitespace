@@ -6,13 +6,25 @@ export const DEFAULT_QLOO_BASE_URL = "https://hackathon.api.qloo.com";
 export const DEFAULT_BEDROCK_MODEL = "anthropic.claude-opus-5-5";
 export const DEFAULT_BEDROCK_FALLBACK_MODEL = "anthropic.claude-opus-4-8";
 export const DEFAULT_AWS_REGION = "us-east-1";
+export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5";
+export const DEFAULT_ANTHROPIC_FALLBACK_MODEL = "claude-opus-4-8";
 
-export interface LlmConfig {
-  provider: "bedrock";
-  region: string;
+interface LlmModels {
   model: string;
   fallbackModel?: string;
 }
+
+export interface BedrockLlmConfig extends LlmModels {
+  provider: "bedrock";
+  region: string;
+}
+
+export interface AnthropicLlmConfig extends LlmModels {
+  provider: "anthropic";
+  apiKey: string;
+}
+
+export type LlmConfig = BedrockLlmConfig | AnthropicLlmConfig;
 
 export interface Config {
   port: number;
@@ -47,18 +59,43 @@ const hasAwsCredentials = (env: Record<string, string | undefined>): boolean =>
     env.AWS_WEB_IDENTITY_TOKEN_FILE,
   );
 
-export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfig | undefined {
-  const provider = env.LLM_PROVIDER?.trim().toLowerCase();
-  if (provider === "none") return undefined;
-  if (provider !== "bedrock" && !hasAwsCredentials(env)) return undefined;
-  const fallback = env.BEDROCK_FALLBACK_MODEL_ID ?? DEFAULT_BEDROCK_FALLBACK_MODEL;
-  const config: LlmConfig = {
+const fallbackModel = (value: string | undefined, fallback: string): string | undefined => {
+  const model = (value ?? fallback).trim();
+  return model && model !== "none" ? model : undefined;
+};
+
+function loadBedrockConfig(env: Record<string, string | undefined>): BedrockLlmConfig {
+  const config: BedrockLlmConfig = {
     provider: "bedrock",
     region: env.AWS_REGION || env.AWS_DEFAULT_REGION || DEFAULT_AWS_REGION,
     model: env.BEDROCK_MODEL_ID || DEFAULT_BEDROCK_MODEL,
   };
-  if (fallback.trim() && fallback.trim() !== "none") config.fallbackModel = fallback.trim();
+  const fallback = fallbackModel(env.BEDROCK_FALLBACK_MODEL_ID, DEFAULT_BEDROCK_FALLBACK_MODEL);
+  if (fallback) config.fallbackModel = fallback;
   return config;
+}
+
+function loadAnthropicConfig(
+  env: Record<string, string | undefined>,
+): AnthropicLlmConfig | undefined {
+  const apiKey = env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) return undefined;
+  const config: AnthropicLlmConfig = {
+    provider: "anthropic",
+    apiKey,
+    model: env.ANTHROPIC_MODEL_ID || DEFAULT_ANTHROPIC_MODEL,
+  };
+  const fallback = fallbackModel(env.ANTHROPIC_FALLBACK_MODEL_ID, DEFAULT_ANTHROPIC_FALLBACK_MODEL);
+  if (fallback) config.fallbackModel = fallback;
+  return config;
+}
+
+export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfig | undefined {
+  const provider = env.LLM_PROVIDER?.trim().toLowerCase();
+  if (provider === "none") return undefined;
+  if (provider === "anthropic") return loadAnthropicConfig(env);
+  if (provider === "bedrock") return loadBedrockConfig(env);
+  return loadAnthropicConfig(env) ?? (hasAwsCredentials(env) ? loadBedrockConfig(env) : undefined);
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {

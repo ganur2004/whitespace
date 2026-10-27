@@ -16,8 +16,10 @@ import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { IpRateLimiter } from "../src/limits.js";
 import { SyntheticFixtures } from "../src/demo/fixtures.js";
+import { AnthropicLlm } from "../src/llm/anthropic.js";
 import { BedrockLlm } from "../src/llm/bedrock.js";
 import type { LlmClient, LlmRequest } from "../src/llm/client.js";
+import { createLlmClient } from "../src/llm/create.js";
 import { QlooClient } from "../src/qloo/client.js";
 import { fallbackPlan, planConcept } from "../src/scout/concept.js";
 import { runScout } from "../src/scout/pipeline.js";
@@ -239,6 +241,20 @@ describe("Bedrock client", () => {
       "anthropic.claude-opus-5-5",
       "anthropic.claude-opus-4-8",
     ]);
+  });
+});
+
+describe("Anthropic API client", () => {
+  it("is created from the config and sends requests to the configured model", async () => {
+    expect(createLlmClient(loadConfig({ ANTHROPIC_API_KEY: "key" }))).toBeInstanceOf(AnthropicLlm);
+
+    const create = vi.fn().mockResolvedValue(message([text("ok")]));
+    const llm = new AnthropicLlm({ apiKey: "key", model: "claude-sonnet-5-5" }, { create });
+    await llm.create({ max_tokens: 100, messages: [{ role: "user", content: "hi" }] });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "claude-sonnet-5-5", max_tokens: 100 }),
+    );
   });
 });
 
