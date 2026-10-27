@@ -233,7 +233,7 @@ export class Analysis {
   zoneFacts(zone: Zone, detailed = false): string {
     const profile = zone.profile ?? this.profiles.get(zone.id);
     const lines = [
-      `Zone ${zone.rank}${profile?.neighborhood ? ` (${profile.neighborhood})` : ""}: score ${zone.score.toFixed(2)}, ${zone.cellCount} map cells, ${zone.competitorsInside} similar venues inside, ${zone.competitorsNearby} inside or within 1 km. ${zone.reasons.join(". ")}.`,
+      `Zone ${zone.rank}${profile?.neighborhood ? ` (${profile.neighborhood})` : ""}: score ${zone.score.toFixed(2)}, ${zone.cellCount} map cells, ${zone.competitorsInside} similar venues inside, ${zone.competitorsNearby} inside or within 1 km of its edge. ${zone.reasons.join(". ")}.`,
     ];
     const places = profile?.tastePlaces ?? [];
     if (places.length > 0) {
@@ -248,8 +248,8 @@ export class Analysis {
       const rivals = this.rivalsNear(zone);
       lines.push(
         rivals.length === 0
-          ? "  No similar venues within 1.5 km."
-          : `  Closest similar venues: ${rivals.map((place) => this.describePlace(place, "competitor", false)).join("; ")}`,
+          ? "  No similar venues within 1.5 km of the zone center."
+          : `  Closest similar venues: ${rivals.map((place) => `${this.describePlace(place, "competitor", false)}, ${(distanceMeters([place.lon, place.lat], zone.centroid) / 1000).toFixed(1)} km from the zone center`).join("; ")}`,
       );
       if (profile?.brief) lines.push(`  Brief already shown: ${profile.brief}`);
     }

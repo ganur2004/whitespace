@@ -349,6 +349,18 @@ describe("agent", () => {
   });
 });
 
+describe("zone facts", () => {
+  it("say where each competitor distance is measured from", async () => {
+    const analysis = new Analysis(demoClient(), stateOf(await austin()), quiet);
+    const facts = analysis.require().zones.map((zone) => analysis.zoneFacts(zone, true));
+
+    expect(facts.every((fact) => fact.includes("within 1 km of its edge"))).toBe(true);
+    expect(facts.join("\n")).toMatch(
+      /Closest similar venues: \[\[\w+\]\][^;\n]*, \d+\.\d km from the zone center/,
+    );
+  });
+});
+
 describe("POST /api/chat", () => {
   const app = () =>
     createApp(

@@ -81,7 +81,7 @@ export function templateBrief(analysis: Analysis, zone: Zone): string {
   sentences.push(
     rival
       ? `The closest similar venue is ${analysis.registry.ref("competitor", rival.id, rival.name)}.`
-      : "No similar venue is within 1.5 km.",
+      : "No similar venue is within 1.5 km of the zone center.",
   );
   sentences.push("Before committing, check rent, foot traffic and visit in person.");
   return substitute(sentences.join(" "), analysis.registry);
