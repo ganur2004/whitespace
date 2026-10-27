@@ -11,6 +11,7 @@ import type { QlooClient } from "./qloo/client.js";
 import { createQlooClient } from "./qloo/create.js";
 import type { LlmClient } from "./llm/client.js";
 import { createLlmClient } from "./llm/create.js";
+import { requireOriginSecret } from "./origin.js";
 import { chatRoutes } from "./routes/chat.js";
 import { profileRoutes } from "./routes/profile.js";
 import { scoutRoutes } from "./routes/scout.js";
@@ -36,6 +37,7 @@ export function createApp(config: Config, deps: AppDeps = {}): Hono {
   const llm = deps.llm === null ? undefined : (deps.llm ?? createLlmClient(config));
 
   app.use(secureHeaders());
+  if (config.originSecret) app.use(requireOriginSecret(config.originSecret));
   app.use("/api/*", (c, next) =>
     bodyLimit({
       maxSize: c.req.path === "/api/chat" ? MAX_CHAT_BODY_BYTES : MAX_BODY_BYTES,

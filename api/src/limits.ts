@@ -59,6 +59,7 @@ export function clientAddress(c: Context, trustProxy: boolean): string {
     const forwarded =
       c.req.header("fly-client-ip") ??
       c.req.header("cf-connecting-ip") ??
+      withoutPort(c.req.header("cloudfront-viewer-address")) ??
       c.req.header("x-forwarded-for")?.split(",")[0];
     if (forwarded?.trim()) return forwarded.trim();
   }
@@ -67,4 +68,10 @@ export function clientAddress(c: Context, trustProxy: boolean): string {
   } catch {
     return "unknown";
   }
+}
+
+function withoutPort(address: string | undefined): string | undefined {
+  if (!address) return undefined;
+  const colon = address.lastIndexOf(":");
+  return colon > 0 ? address.slice(0, colon) : address;
 }

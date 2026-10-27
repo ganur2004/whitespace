@@ -36,6 +36,7 @@ export interface Config {
   fixturesDir: string;
   webDist: string;
   trustProxy: boolean;
+  originSecret: string | undefined;
   scoutBurst: number;
   scoutPerMinute: number;
   profileBurst: number;
@@ -110,6 +111,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     fixturesDir: env.FIXTURES_DIR || resolve(API_ROOT, "fixtures"),
     webDist: env.WEB_DIST || resolve(API_ROOT, "../web/dist"),
     trustProxy: env.TRUST_PROXY !== "false",
+    originSecret: env.ORIGIN_SECRET || undefined,
     scoutBurst: positive(env.SCOUT_LIMIT_BURST, 8),
     scoutPerMinute: positive(env.SCOUT_LIMIT_PER_MINUTE, 3),
     profileBurst: positive(env.PROFILE_LIMIT_BURST, 20),
