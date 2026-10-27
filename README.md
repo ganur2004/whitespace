@@ -5,8 +5,8 @@
 Describe a venue concept and pick a city. Whitespace turns the concept into taste anchors from Qloo, maps how strongly every ~150 m cell of the city matches that taste, subtracts competition weighted by how much the same audience likes each rival, and shows the top 3 zones on a map with reasons you can check. Then you keep talking to the agent: exclude an area, care less about competition, compare two zones, ask why a place is on the list.
 
 - **Live demo:** https://d3qszcalamj7w3.cloudfront.net
-- **Devpost:** TODO: add the project page URL
-- **Video (3 min):** TODO: add the video URL
+- **Devpost:** https://devpost.com/software/whitespace-0dvx1n
+- **Video (3 min):** https://www.youtube.com/watch?v=VHZgg-X6KXM
 
 ![Whitespace: top 3 zones for a ramen bar with a vinyl corner in Austin](docs/screenshot.png)
 
