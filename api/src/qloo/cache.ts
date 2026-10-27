@@ -69,8 +69,12 @@ export class FileStore implements ResponseStore {
   }
 
   private path(key: string): string {
-    return join(this.dir, `${createHash("sha256").update(key).digest("hex").slice(0, 32)}.json`);
+    return join(this.dir, storedFileName(key));
   }
+}
+
+export function storedFileName(key: string): string {
+  return `${createHash("sha256").update(key).digest("hex").slice(0, 32)}.json`;
 }
 
 export function isNotFound(error: unknown): boolean {

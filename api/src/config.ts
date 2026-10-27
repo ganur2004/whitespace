@@ -32,6 +32,7 @@ export interface Config {
   qlooApiKey: string | undefined;
   demoMode: boolean;
   cacheDir: string;
+  cacheBucket: string | undefined;
   fixturesDir: string;
   webDist: string;
   trustProxy: boolean;
@@ -105,6 +106,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     qlooApiKey: env.QLOO_API_KEY || undefined,
     demoMode: env.DEMO_MODE === "true",
     cacheDir: env.QLOO_CACHE_DIR || resolve(API_ROOT, "recordings"),
+    cacheBucket: env.QLOO_CACHE_BUCKET || undefined,
     fixturesDir: env.FIXTURES_DIR || resolve(API_ROOT, "fixtures"),
     webDist: env.WEB_DIST || resolve(API_ROOT, "../web/dist"),
     trustProxy: env.TRUST_PROXY !== "false",
