@@ -11,7 +11,8 @@
   "workspaces": [
     "shared",
     "api",
-    "web"
+    "web",
+    "infra"
   ],
   "scripts": {
     "postinstall": "tsc -b shared",
