@@ -95,7 +95,7 @@ opportunity(cell) = affinity · (1 − competitionWeight · pressure)
 
 ## The agent
 
-The agent runs on an LLM with tool use through Amazon Bedrock. A deterministic pipeline does the first analysis, so the result is reproducible; the agent handles the conversation around it.
+The agent runs on an LLM with tool use, through the Anthropic API or Amazon Bedrock. A deterministic pipeline does the first analysis, so the result is reproducible; the agent handles the conversation around it.
 
 | Tool               | What it does                                                         |
 | ------------------ | -------------------------------------------------------------------- |
@@ -148,7 +148,7 @@ Requires Node.js 20 or newer.
 npm install
 ```
 
-**With a Qloo key.** Copy `.env.example` to `.env`, set `QLOO_API_KEY`, and optionally AWS credentials for the agent (`AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`). Without AWS credentials the chat works in Basic mode.
+**With a Qloo key.** Copy `.env.example` to `.env`, set `QLOO_API_KEY`, and optionally `ANTHROPIC_API_KEY` for the agent (or AWS credentials for Amazon Bedrock: `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`). Without an LLM key the chat works in Basic mode.
 
 ```bash
 npm run dev
@@ -176,16 +176,18 @@ docker run -p 8090:8080 -e DEMO_MODE=true whitespace
 
 For live data pass `-e QLOO_API_KEY=...` instead of `DEMO_MODE`, and mount a volume at `/data/qloo` to keep the response cache between restarts.
 
-| Variable                                      | Default                          | Purpose                                                            |
-| --------------------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
-| `QLOO_API_KEY`                                | none                             | Qloo hackathon key, server side only                               |
-| `QLOO_BASE_URL`                               | `https://hackathon.api.qloo.com` | The hackathon key only works here                                  |
-| `DEMO_MODE`                                   | `false`                          | Synthetic or recorded data, no Qloo calls                          |
-| `QLOO_CACHE_DIR`                              | `/data/qloo` in the container    | Disk cache of Qloo responses                                       |
-| `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION`      | none, `us-east-1`                | Amazon Bedrock access for the agent                                |
-| `BEDROCK_MODEL_ID`                            | see `.env.example`               | Model for the agent, briefs and concept parsing                    |
-| `LLM_PROVIDER`                                | auto                             | `none` forces Basic mode                                           |
-| `SCOUT_LIMIT_BURST`, `SCOUT_LIMIT_PER_MINUTE` | `8`, `3`                         | Per-IP limit on analyses; answers fully served from cache are free |
+| Variable                                      | Default                          | Purpose                                                                                                |
+| --------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `QLOO_API_KEY`                                | none                             | Qloo hackathon key, server side only                                                                   |
+| `QLOO_BASE_URL`                               | `https://hackathon.api.qloo.com` | The hackathon key only works here                                                                      |
+| `DEMO_MODE`                                   | `false`                          | Synthetic or recorded data, no Qloo calls                                                              |
+| `QLOO_CACHE_DIR`                              | `/data/qloo` in the container    | Disk cache of Qloo responses                                                                           |
+| `ANTHROPIC_API_KEY`                           | none                             | Anthropic API access for the agent                                                                     |
+| `ANTHROPIC_MODEL_ID`                          | `claude-sonnet-5-5`              | Model for the agent, briefs and concept parsing                                                        |
+| `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION`      | none, `us-east-1`                | Amazon Bedrock access instead of the Anthropic API                                                     |
+| `BEDROCK_MODEL_ID`                            | see `.env.example`               | Model on Bedrock                                                                                       |
+| `LLM_PROVIDER`                                | auto                             | `anthropic` or `bedrock` picks the provider (auto prefers the Anthropic key), `none` forces Basic mode |
+| `SCOUT_LIMIT_BURST`, `SCOUT_LIMIT_PER_MINUTE` | `8`, `3`                         | Per-IP limit on analyses; answers fully served from cache are free                                     |
 
 ## Checks
 
