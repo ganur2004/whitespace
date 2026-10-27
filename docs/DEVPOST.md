@@ -18,7 +18,7 @@ An agent that finds where your new venue's audience already lives and goes out, 
 
 ## Built with
 
-typescript, react, maplibre, openfreemap, node.js, hono, amazon-bedrock, qloo, vitest, docker
+typescript, react, maplibre, openfreemap, node.js, hono, anthropic, claude, qloo, vitest, docker
 
 ## About the project
 
@@ -87,7 +87,7 @@ The pipeline streams its steps over Server-Sent Events, so zones appear on the m
 
 **Scoring** lives in a shared package of pure functions with tests, and the browser and the server run the same code. Competition pressure is a Gaussian kernel (σ = 600 m) over competitors, each weighted `0.5 + 0.5 · affinity`, normalized by the 95th percentile. Opportunity is `affinity · (1 − competitionWeight · pressure)`, zero below a minimum taste match and inside excluded areas. Zones are DBSCAN clusters of the best cells, with the radius adapted to the grid size.
 
-**Agent.** An LLM with tool use on Amazon Bedrock and eight tools: `run_scout`, `update_anchors`, `adjust_scoring`, `exclude_area`, `reset_exclusions`, `profile_zone`, `compare_zones` and `explain_place`. Tools that change scoring recompute the zones with the shared scoring code and fetch Qloo profiles for the new zones, so the agent can talk about them.
+**Agent.** An LLM with tool use (Claude Sonnet 5.5 through the Anthropic API) and eight tools: `run_scout`, `update_anchors`, `adjust_scoring`, `exclude_area`, `reset_exclusions`, `profile_zone`, `compare_zones` and `explain_place`. Tools that change scoring recompute the zones with the shared scoring code and fetch Qloo profiles for the new zones, so the agent can talk about them.
 
 **Grounding.** The LLM refers to entities only as `[[id]]` tokens, and code substitutes the names. Each reply and brief is checked: an unknown token or a capitalized name that is not in the data fails the check, the model gets one retry, then a template answer is used. If the LLM is unavailable, the chat answers simple commands from the data in a clearly labeled Basic mode.
 
