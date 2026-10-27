@@ -25,7 +25,7 @@ import {
   zonesGeoJSON,
   type LayerMode,
 } from "./layers.js";
-import { composeMapImage, type MapCapture } from "./capture.js";
+import { captureNextFrame, composeMapImage, type MapCapture } from "./capture.js";
 import { describeCell, describeCompetitor, describeTastePlace, tipElement } from "./tooltip.js";
 
 const STYLE_URL =
@@ -98,16 +98,12 @@ export function MapView({
   useEffect(() => {
     if (!captureRef) return;
     captureRef.current = {
-      capture: () =>
-        new Promise((resolve) => {
-          const instance = map.current;
-          if (!instance) {
-            resolve(undefined);
-            return;
-          }
-          instance.once("render", () => resolve(composeMapImage(instance, zonesRef.current)));
-          instance.triggerRepaint();
-        }),
+      capture: () => {
+        const instance = map.current;
+        return instance
+          ? captureNextFrame(instance, () => composeMapImage(instance, zonesRef.current))
+          : Promise.resolve(undefined);
+      },
     };
     return () => {
       captureRef.current = null;

@@ -4,9 +4,28 @@ import type { Zone } from "@whitespace/shared";
 const MAX_WIDTH = 1600;
 const INK = "#1f2328";
 const ATTRIBUTION = "© OpenStreetMap contributors · OpenFreeMap · taste data: Qloo";
+const CAPTURE_TIMEOUT_MS = 2000;
 
 export interface MapCapture {
   capture: () => Promise<string | undefined>;
+}
+
+export function captureNextFrame(
+  map: Pick<MapLibreMap, "on" | "off" | "triggerRepaint">,
+  draw: () => string | undefined,
+  timeoutMs = CAPTURE_TIMEOUT_MS,
+): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const finish = (image: string | undefined) => {
+      clearTimeout(timer);
+      map.off("render", onRender);
+      resolve(image);
+    };
+    const onRender = () => finish(draw());
+    const timer = setTimeout(() => finish(undefined), timeoutMs);
+    map.on("render", onRender);
+    map.triggerRepaint();
+  });
 }
 
 export function composeMapImage(map: MapLibreMap, zones: readonly Zone[]): string | undefined {
