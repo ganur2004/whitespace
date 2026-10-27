@@ -131,12 +131,13 @@ The agent runs on an LLM with tool use, through the Anthropic API or Amazon Bedr
                   hackathon.api.qloo.com
 ```
 
-One container serves both the API and the built web app, so the demo is one link and the Qloo key never leaves the server.
+The demo is one link and the Qloo key never leaves the server. On AWS, CloudFront serves the web app from S3 and sends `/api/*` to the same Hono app on Lambda, streaming the SSE response; elsewhere one container serves both.
 
 ```
 shared/   types, supported cities, demo scenarios, scoring model
 api/      Hono server: Qloo client, scout pipeline, zone profiles, agent, rate limits
 web/      React app: map, panels, chat, brief export
+infra/    AWS CDK stack: CloudFront, S3, Lambda with response streaming
 scripts/  synthetic fixtures, smoke test, cache warm-up
 ```
 
@@ -175,6 +176,14 @@ docker run -p 8090:8080 -e DEMO_MODE=true whitespace
 ```
 
 For live data pass `-e QLOO_API_KEY=...` instead of `DEMO_MODE`, and mount a volume at `/data/qloo` to keep the response cache between restarts.
+
+**On AWS:** put `QLOO_API_KEY` and `ANTHROPIC_API_KEY` in a Secrets Manager secret, then deploy the CDK stack:
+
+```bash
+npm run deploy -- -c keysSecret=whitespace/keys
+```
+
+The stack runs the API on Lambda with a streaming function URL behind CloudFront, keeps the Qloo cache in S3 and prints the site URL. Setup, options and limits are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 | Variable                                      | Default                          | Purpose                                                                                                |
 | --------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
