@@ -49,7 +49,13 @@ export function describeAudience(portrait: AudiencePortrait): string {
   const lean = genderLean(portrait.gender);
   const gender = lean === "mixed" ? "a mixed gender split" : lean;
   if (peaks.size > 2) {
-    return `Your anchors pull different age groups; together they lean ${peakAge(portrait.age) ?? "toward no single age"}, with ${gender}.`;
+    const ages = AGE_BANDS.map(([, label]) => label).filter((label) => peaks.has(label));
+    return `Your anchors pull different age groups (${joinWithAnd(ages)}), with ${gender}.`;
   }
   return `Together your anchors lean ${peakAge(portrait.age) ?? "toward no single age"}, with ${gender}.`;
+}
+
+function joinWithAnd(items: readonly string[]): string {
+  const last = items.at(-1);
+  return items.length > 1 && last ? `${items.slice(0, -1).join(", ")} and ${last}` : items.join("");
 }

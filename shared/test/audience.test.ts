@@ -55,7 +55,8 @@ describe("audience portrait", () => {
       entry("b", "35_to_44", 0),
       entry("c", "55_and_older", 0),
     ])!;
-    expect(describeAudience(mixed)).toMatch(/^Your anchors pull different age groups/);
-    expect(describeAudience(mixed)).toContain("a mixed gender split");
+    expect(describeAudience(mixed)).toBe(
+      "Your anchors pull different age groups (25–29, 35–44 and 55+), with a mixed gender split.",
+    );
   });
 });
