@@ -6,4 +6,5 @@ dist-types/
 .env.*
 !.env.example
 api/recordings/
+cdk.out/
 .DS_Store

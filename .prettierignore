@@ -4,6 +4,7 @@ node_modules
 package-lock.json
 api/fixtures
 api/recordings
+cdk.out
 SPEC.md
 CLAUDE.md
 docs

@@ -30,7 +30,9 @@
     "start": "node --env-file-if-exists=.env api/dist/index.js",
     "smoke": "tsx --conditions=development scripts/smoke.ts",
     "warm": "tsx --conditions=development scripts/warm.ts",
-    "docker:build": "docker build -t whitespace ."
+    "docker:build": "docker build -t whitespace .",
+    "synth": "npm run build && npm run synth --workspace @whitespace/infra --",
+    "deploy": "npm run build && npm run deploy --workspace @whitespace/infra --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
